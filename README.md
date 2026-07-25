@@ -52,6 +52,18 @@ from, a bot forged a fake transfer four minutes after the real theft, using a to
 homoglyph) and an address engineered to look like the victim's. Any tool that reads "transfers where
 from = target" straight from an indexer will report movements that never happened. Check the signer.
 
+### A correction, kept because it is the most useful thing here
+
+An earlier version of this README and of `rugsignals.js` claimed that the rugs observed while building
+this all died by liquidity withdrawal, and that the unlocked-LP flag had already been printed on each
+verdict. That was checked against the stored evidence and it is false. Not one of the eight rugs carried
+that flag. Seven carried a single flag and it was the holder count; the eighth had no data at all. The
+unlocked-pool flag appeared on tokens that **survived**.
+
+The claim had been generalised from two examples that fit the story and neither of which rugged. It was
+plausible, mechanically sound, and wrong — which is exactly the shape of the errors this repository is
+meant to catch, so it stays documented rather than quietly edited away.
+
 ### On `vet_approach`, and why it refuses to grade how convincing something is
 
 The lure that started this repository was not phishing in any recognisable sense. It was a 35-question
