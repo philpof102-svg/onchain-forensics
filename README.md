@@ -37,6 +37,7 @@ Three examples, all real, all caught by testing against known answers:
 | `launch_funder` | Who paid for this launch, and what else did they pay for? |
 | `trace_theft` | Where did the stolen funds go? |
 | `recovery_offer` | Is this offer to get my money back the second theft? |
+| `vet_approach` | Is this inbound opportunity a lure? |
 
 ### The two ideas worth stealing from this repo
 
@@ -50,6 +51,30 @@ contracts routinely emit transfers naming addresses that never signed anything �
 from, a bot forged a fake transfer four minutes after the real theft, using a token named `EṬH` (a Unicode
 homoglyph) and an address engineered to look like the victim's. Any tool that reads "transfers where
 from = target" straight from an indexer will report movements that never happened. Check the signer.
+
+### On `vet_approach`, and why it refuses to grade how convincing something is
+
+The lure that started this repository was not phishing in any recognisable sense. It was a 35-question
+production dossier across six chapters, with per-chapter shot lists, citing the target's real scoring model
+and settlement rails, using his own catchphrase back at him, and quoting his posts verbatim.
+
+It also asked genuinely hard questions — whether one score creates false certainty, whether the oracle
+profits from generating fear. **That was the payload, not the praise.** A flatterer never includes criticism,
+so including it is exactly what flips an approach from marketing into journalism in the reader's head.
+
+The mechanism underneath is **effort as a trust signal**. Producing that much researched detail used to cost
+hours of human work, so nobody spent it to scam one person, and every reader's instinct silently priced that
+in. The arithmetic held for decades. It does not hold now — the same document generates in minutes from a
+public profile — and nobody updated their instincts.
+
+So this tool deliberately does not score how convincing an approach is. Convincingness is manufacturable, and
+grading it would hand a forgery a good mark. It grades the two things a forger cannot make harmless: **where
+a link actually points**, and **what the sender wants you to do**. A brand name to the left of the
+registrable domain is a free label — `wechat.web09eu.com` is `web09eu.com`.
+
+The false-positive test earned its keep on the first run: a version keyed on brand names alone flagged
+`meet.google.com` — Google Meet, the real one — as impersonation. A tool that warns about Google Meet is a
+tool people uninstall.
 
 ### On `recovery_offer`
 

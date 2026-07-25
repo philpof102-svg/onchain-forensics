@@ -17,6 +17,7 @@ const { classifyB20 } = require('../lib/b20');
 const { traceFeeder } = require('../lib/feeder');
 const { whatMoved, readBridgeExit, followTron } = require('../lib/trace');
 const { assessRecoveryOffer } = require('../lib/recovery');
+const { vetApproach } = require('../lib/lure');
 
 const TOOLS = [
   { name: 'vet_meme', description: 'Which contract is the REAL token behind a ticker? A meme symbol routinely has ten or more look-alike contracts across chains, and buying the wrong one is a total loss. Fail-closed from live liquidity: genuine (one contract dominates), ambiguous (top two tied — NEVER certified), impersonation (the address you passed is not the dominant one), thin (nothing credible).',
@@ -46,6 +47,13 @@ const TOOLS = [
       chain: { type: 'string' },
       asksForSignature: { type: 'boolean' }, asksForUpfrontPayment: { type: 'boolean' },
       asksForSeedOrKey: { type: 'boolean' }, asksToInstall: { type: 'boolean' } }, required: [] } },
+  { name: 'vet_approach', description: 'Judge an inbound opportunity — podcast, interview, partnership, job, AMA — by what it ASKS, not by how good it looks. Built from a lure that worked on someone who verifies counterparties professionally: a 35-question production dossier citing his real work, using his own catchphrase, quoting his posts, and asking genuinely hard questions, because a flatterer never includes criticism and including it is what makes an approach read as journalism. The mechanism is effort as a trust signal: that much detail used to cost hours of human work, so nobody spent it on one target. That arithmetic no longer holds. So this does NOT score how convincing an approach is — that would give a forgery a good grade. It grades where a link actually points (a brand to the left of the registrable domain is a free label: wechat.web09eu.com is web09eu.com) and what the sender wants from you. Never returns safe.',
+    inputSchema: { type: 'object', properties: {
+      links: { type: 'array', items: { type: 'string' } },
+      platform: { type: 'string' },
+      asksToInstall: { type: 'boolean' }, asksForKeyOrSeed: { type: 'boolean' },
+      asksForSignature: { type: 'boolean' }, asksForUpfrontPayment: { type: 'boolean' },
+      urgency: { type: 'boolean' } }, required: [] } },
 ];
 
 async function callTool(name, a = {}) {
@@ -68,6 +76,7 @@ async function callTool(name, a = {}) {
     return { error: 'mode must be moved | bridge | tron' };
   }
   if (name === 'recovery_offer') return await assessRecoveryOffer(a);
+  if (name === 'vet_approach') return vetApproach(a);
   return { error: 'unknown tool: ' + name };
 }
 
