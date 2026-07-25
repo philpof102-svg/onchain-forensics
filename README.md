@@ -1,6 +1,6 @@
 # onchain-forensics
 
-Six checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
+Seven checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
 call them, and as plain modules so you can call them yourself.
 
 No API keys. No accounts. Every source is a public endpoint. Read-only throughout — nothing here can move
