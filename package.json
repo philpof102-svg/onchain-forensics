@@ -7,8 +7,8 @@
   "files": ["bin", "lib", "test", "README.md", "LICENSE"],
   "scripts": {
     "start": "node bin/onchain-forensics-mcp.js",
-    "test": "node test/publishable.js",
-    "prepublishOnly": "node test/publishable.js"
+    "test": "node test/agent-vet-gate.js && node test/publishable.js",
+    "prepublishOnly": "node test/agent-vet-gate.js && node test/publishable.js"
   },
   "keywords": ["mcp", "onchain", "forensics", "rug-pull", "wallet-drainer", "approvals", "agent-security", "base", "tron", "security"],
   "license": "MIT",

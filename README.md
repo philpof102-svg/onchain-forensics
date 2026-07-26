@@ -159,6 +159,29 @@ agent is running and gated. That is `unauditable` — neither a pass nor a fail.
 It deliberately does not score how good the description reads, for the same reason `vet_approach` does not:
 a well-written tool listing is free to fabricate, and grading prose hands a forgery a good mark.
 
+**And then it flagged our own server, which is how the rule above got finished.** The first version returned
+`high_risk` on a live endpoint because one of its 43 tools takes an `amount`. Reading the handler showed that
+tool holds no key and broadcasts nothing: it requires an EIP-712 **signature the caller has to produce**.
+
+A payment surface only counts against an agent if the **agent** can fire it. A tool gated on a caller-supplied
+signature is the agent-tool equivalent of a contract with ownership renounced — the capability is there and
+nobody unattended can trigger it. That is the same rule `rugsignals.js` had been applying to contracts since
+day one, and `vet_agent` was not applying it. **The second use of a principle deserves as much scrutiny as
+the first**; I had written it down and still missed it.
+
+The gate is narrow on purpose, because a loose reading of it would excuse every drainer with an auth header:
+
+- the field must be **required**, not merely accepted — an optional signature gates nothing;
+- it must authorize the **caller**. An `apiKey` authorizes the *agent*: a standing credential it already
+  holds, which is exactly the unattended case being tested for.
+
+Those two evasions and a third (no `required` array at all) are rows in `test/agent-vet-gate.js`, because a
+gate nobody tried to walk through is not a gate. A gated surface never escalates and is **never dropped**
+either — it is reported on every verdict including the clean ones, since "we found a payment tool and decided
+it was fine" is a conclusion the reader is entitled to disagree with. What the check cannot see is whether the
+server actually verifies that signature; that is off-chain code, so it is reported as a *described* gate and
+never as proof of one.
+
 ### The publish gate, and a test that passed while the server was dead
 
 `npm test` runs `test/publishable.js`, which refuses to call this repo publishable unless every relative
