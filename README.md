@@ -238,6 +238,32 @@ recorded in the module — a hardcoded verdict line that claimed no tool named a
 because `tokenize` splits it into `signed` + `tx`. That last one is the **third** time in this file that
 splitting an identifier silently disabled a rule.
 
+#### The danger no schema declares: browser control plus a wallet on the same machine
+
+GitHub trending surfaced a project whose pitch is that your agent **inherits your existing logins, cookies and
+extensions** — your real Chrome profile, with in-page tools named , , , ,
+, . Pointed at it,  reported a read-only surface. Correctly, by its own rules: a
+value VERB is required in a name before the schema is examined at all, and browser automation has none. 
+even carries a  field, and it is never reached.
+
+The danger is not in any tool. It is in what the browser can **reach**. On the machine this was tested from,
+ reports **eight** browser wallet vaults on disk, one of them 27 MB of MetaMask state. An agent
+that can navigate and click inside that profile can drive the wallet, which is a payment surface no input
+schema will ever advertise.
+
+So the check flags the **combination**, never browser control alone — the same tools against a clean container
+are ordinary web automation, and flagging those would get this muted. The second half is checkable:
+ is passed in, and comes from the vault sweep.
+
+Getting the detector right took two wrong versions, both kept as test rows. Keyed on VERBS, it fired on five of
+six honest tool sets — a trading agent ( + ), a file manager, a database client, a
+terminal, a CI runner — because  and  are the most generic verbs in software. Keyed on names AND
+schemas, it then MISSED our own Chrome MCP, whose action tools are called  and  while
+taking  and : a false negative, which on a security check is the worse direction. A DOM field
+decides alone now. **A selector or a coordinate exists for exactly one purpose — addressing something
+rendered.**  takes a path,  takes sql,  takes a size, and a git
+ takes a  that is a branch; none of them touch a DOM.
+
 ### On `seed_exposure`, and the false positive it produced on its first real machine
 
 *"Self custody if you know how to keep your seedphrase safe."* The condition is the whole sentence, and nothing
