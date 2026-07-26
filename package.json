@@ -1,7 +1,7 @@
 {
   "name": "onchain-forensics",
   "version": "0.1.0",
-  "description": "Ten checks you run before you pay, and after you've been robbed. MCP server + plain modules. No keys, no accounts, read-only.",
+  "description": "Eleven checks you run before you pay, and after you've been robbed. MCP server + plain modules. No keys, no accounts, read-only.",
   "bin": {
     "onchain-forensics-mcp": "bin/onchain-forensics-mcp.js"
   },
@@ -15,8 +15,8 @@
   ],
   "scripts": {
     "start": "node bin/onchain-forensics-mcp.js",
-    "test": "node test/agent-vet-gate.js && node test/lure-ask.js && node test/publishable.js",
-    "prepublishOnly": "node test/agent-vet-gate.js && node test/lure-ask.js && node test/publishable.js"
+    "test": "node test/agent-vet-gate.js && node test/lure-ask.js && node test/seed-exposure.js && node test/publishable.js",
+    "prepublishOnly": "node test/agent-vet-gate.js && node test/lure-ask.js && node test/seed-exposure.js && node test/publishable.js"
   },
   "keywords": [
     "mcp",

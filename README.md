@@ -1,6 +1,6 @@
 # onchain-forensics
 
-Ten checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
+Eleven checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
 call them, and as plain modules so you can call them yourself.
 
 No API keys. No accounts. Every source is a public endpoint. Read-only throughout — nothing here can move
@@ -41,6 +41,7 @@ Three examples, all real, all caught by testing against known answers:
 | `open_approvals` | Which doors into my wallet are still open? |
 | `watch_wallet` | What **changed** around this wallet since we last looked? |
 | `vet_agent` | Is this agent safe to connect to, and safe to pay? |
+| `seed_exposure` | Is a recovery phrase sitting in cleartext on this machine? |
 
 ### The two ideas worth stealing from this repo
 
@@ -235,6 +236,50 @@ recorded in the module — a hardcoded verdict line that claimed no tool named a
 `surface` field in the same response listed two that did, and a set entry (`signedtx`) that could never match
 because `tokenize` splits it into `signed` + `tx`. That last one is the **third** time in this file that
 splitting an identifier silently disabled a rule.
+
+### On `seed_exposure`, and the false positive it produced on its first real machine
+
+*"Self custody if you know how to keep your seedphrase safe."* The condition is the whole sentence, and nothing
+ships that checks it. An antivirus answers *do you have a known virus*; the question a person holding crypto
+actually has is *is my recovery phrase readable by anything that runs here*.
+
+That question is **decidable**, which is the only reason this is worth building rather than guessing at. A
+keyword scan drowns immediately — `abandon`, `able`, `about` and `absent` are ordinary English and all four are
+BIP-39 words. But a mnemonic is not a bag of words. It is a **run** of 12/15/18/21/24 consecutive words drawn
+from a 2048-word list, and BIP-39 puts a **checksum** in the last word:
+
+```
+word indices (11 bits each) → entropy bits ‖ checksum bits
+checksum must equal the leading bits of SHA-256(entropy)
+```
+
+So a candidate is proven by arithmetic, not scored. Measured on 1.6 MB of real English prose and source across
+204 files: **zero** confirmed hits.
+
+**It never outputs the phrase.** Not to stdout, not to a log, not in an error. It reports the file, the line and
+the word count. This output ends up in terminal buffers, CI logs, screenshots and pasted bug reports, none of
+which is a place a seed belongs — a scanner that prints the seed it found is a stealer with good intentions, and
+good intentions are not a security property. The location is enough to act on: go and look.
+
+**Then it was pointed at a real machine and returned `exposed`, wrongly.** The hit was inside a paywall template
+that embeds a minified wallet library, and the library embeds all 2048 BIP-39 words. A 15-word window in that
+region passed the checksum by chance.
+
+The bounded offset search was written to prevent precisely that, and it worked — on the axis I had thought
+about. Minified code splits the wordlist region into thirty-odd separate runs, and each run then gets its own
+bounded search: roughly 600 checksum tests in one file, at 1/16 each for a 12-word window. A coincidental pass
+there is not a risk, it is arithmetic. **I had capped the multiplicity inside a run and left the number of runs
+unbounded** — the same problem rotated ninety degrees.
+
+The fix is that the file carries its own refutation. A note holding a seed contains 12 to 24 wordlist words; a
+wallet library contains hundreds. Above 200 distinct wordlist words the file is a **carrier** — a library, a
+language pack, or the list itself — and no phrase is claimed inside it. Both halves are tested: the carrier is
+never confirmed, and a long document that *also* contains a real phrase still is.
+
+**What it cannot see, said plainly, because on this question silence reads as safety.** No images, no PDFs, no
+password managers, no browser storage, no encrypted archives, nothing outside the paths given. `nothing_found`
+means nothing was found *in what was read* — the result carries `complete` and a per-reason `skipped` count so
+a partial scan can never be mistaken for a clean bill of health.
 
 ### The publish gate, and a test that passed while the server was dead
 

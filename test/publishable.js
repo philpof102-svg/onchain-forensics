@@ -101,7 +101,7 @@ for (const f of files) {
 
 // ---------------------------------------------------------------- 2. LOAD
 const ENTRY = ['vetMeme', 'scanRugOne', 'classifyB20', 'traceFeeder', 'followTron', 'hexToTron',
-  'assessRecoveryOffer', 'vetApproach', 'checkApprovals', 'allowancesBatch', 'watchWallet', 'vetAgent'];
+  'assessRecoveryOffer', 'vetApproach', 'checkApprovals', 'allowancesBatch', 'watchWallet', 'vetAgent', 'scanPaths', 'checksumValid'];
 let mod = null;
 try {
   mod = require(path.join(ROOT, 'lib', 'index.js'));
@@ -117,7 +117,7 @@ try {
 // Over real stdio, because that is the only interface a client has. A server whose module loads and whose
 // tools/list is empty is still a dead server, and only this check can tell the difference.
 const TOOLS = ['vet_meme', 'rug_powers', 'b20_authentic', 'launch_funder', 'trace_theft',
-  'recovery_offer', 'vet_approach', 'open_approvals', 'watch_wallet', 'vet_agent'];
+  'recovery_offer', 'vet_approach', 'open_approvals', 'watch_wallet', 'vet_agent', 'seed_exposure'];
 
 const p = spawn(process.execPath, [path.join(ROOT, 'bin', 'onchain-forensics-mcp.js')], { stdio: ['pipe', 'pipe', 'pipe'] });
 let buf = '', stderr = '';
@@ -179,5 +179,8 @@ setTimeout(() => {
     for (const f of fail) note('  - ' + f);
     process.exit(1);
   }
-  note('PUBLISHABLE: requires resolve, index exports, server boots and lists all 10 tools.');
+  // Counted, not asserted. This line said 'all 10 tools' while the gate below it was checking eleven — a
+  // hardcoded count drifting away from what it summarises, in the file whose fourth check exists to catch
+  // exactly that. The lesson keeps having to be relearned in each new place a number is written by hand.
+  note('PUBLISHABLE: requires resolve, index exports, server boots and lists all ' + names.length + ' tools.');
 }, 8000);
