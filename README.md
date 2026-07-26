@@ -1,6 +1,6 @@
 # onchain-forensics
 
-Eleven checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
+Twelve checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
 call them, and as plain modules so you can call them yourself.
 
 No API keys. No accounts. Every source is a public endpoint. Read-only throughout — nothing here can move
@@ -42,6 +42,7 @@ Three examples, all real, all caught by testing against known answers:
 | `watch_wallet` | What **changed** around this wallet since we last looked? |
 | `vet_agent` | Is this agent safe to connect to, and safe to pay? |
 | `seed_exposure` | Is a recovery phrase sitting in cleartext on this machine? |
+| `key_exposure` | What key material is on this disk, and what still holds an old copy of it? |
 
 ### The two ideas worth stealing from this repo
 

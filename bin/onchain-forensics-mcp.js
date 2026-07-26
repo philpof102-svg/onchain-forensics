@@ -22,6 +22,7 @@ const { checkApprovals } = require('../lib/approvals');
 const { watchWallet } = require('../lib/wallet-watch');
 const { vetAgent } = require('../lib/agent-vet');
 const SEED = require('../lib/seedscan');
+const KEY = require('../lib/keyscan');
 
 const TOOLS = [
   { name: 'vet_meme', description: 'Which contract is the REAL token behind a ticker? A meme symbol routinely has ten or more look-alike contracts across chains, and buying the wrong one is a total loss. Fail-closed from live liquidity: genuine (one contract dominates), ambiguous (top two tied — NEVER certified), impersonation (the address you passed is not the dominant one), thin (nothing credible).',
@@ -77,6 +78,9 @@ const TOOLS = [
   { name: 'seed_exposure', description: 'Is a recovery phrase sitting in cleartext on this machine? "Self custody if you know how to keep your seedphrase safe" puts the whole condition in the sentence, and nothing ships that checks it: an antivirus answers "do you have a known virus", not "is my seed readable by anything that runs here". This question is DECIDABLE rather than scored, which is why it is worth answering. A keyword scan drowns — abandon, able, about and absent are ordinary English and all four are BIP-39 words — but a mnemonic is a RUN of 12/15/18/21/24 consecutive words from a 2048-word list, and BIP-39 puts a CHECKSUM in the last word, so a candidate is proven by arithmetic. It NEVER outputs the phrase: only the file, the line and the word count, because this output ends up in terminal buffers, logs and screenshots, and a scanner that prints the seed it found is a stealer with good intentions. Reports its own blind spots: it cannot read images, PDFs, password managers, browser storage or encrypted archives, so "nothing found" means nothing was found IN WHAT WAS READ. Read-only, no network, zero dependencies.',
     inputSchema: { type: 'object', properties: {
       paths: { type: 'array', items: { type: 'string' }, description: 'directories to scan; defaults to Documents, Desktop, Downloads and OneDrive equivalents' } }, required: [] } },
+  { name: 'key_exposure', description: 'What key material is on this disk, and which of it is readable without a password? The companion to seed_exposure, and it exists because a real theft happened WITHOUT the phrase ever being written down: the key was exfiltrated. The trap is that a secp256k1 private key is 64 hex characters and so is every SHA-256 hash, every git object id and every transaction hash in a saved response — searching for the value SHAPE finds hashes by the thousand. Two things carry information instead: STRUCTURE (a Web3 Secret Storage keystore has version 3 and a crypto member with ciphertext, kdf and mac — nothing else looks like that, and finding one is not an exposure, it is an encrypted wallet whose strength is its password), and THE LABEL (cleartext keys are named by what needs them, so this matches PRIVATE_KEY and rejects PRIVATE_KEY_HASH). The finding people miss is RETAINED COPIES: rotating a secret does not remove it from the disk, because editor history, session caches and backup folders keep snapshots of what the file used to say — on the machine this was built for, one .env with three named keys had eighteen previous versions still readable. Also reports browser wallet vaults by PRESENCE only, since that is how a key leaves a machine when it was never in a text file. Never outputs key material, not even a prefix: a four-byte prefix narrows a brute force. Read-only, never decrypts, never derives an address.',
+    inputSchema: { type: 'object', properties: {
+      paths: { type: 'array', items: { type: 'string' }, description: 'directories to scan; defaults to Documents, Desktop and Downloads' } }, required: [] } },
 ];
 
 async function callTool(name, a = {}) {
@@ -109,6 +113,10 @@ async function callTool(name, a = {}) {
     return r.ok ? r : { error: r.reason };
   }
   if (name === 'vet_agent') return await vetAgent(a);
+  if (name === 'key_exposure') {
+    const paths = Array.isArray(a.paths) && a.paths.length ? a.paths : SEED.defaultPaths();
+    return KEY.scanKeyPaths(paths);
+  }
   if (name === 'seed_exposure') {
     const paths = Array.isArray(a.paths) && a.paths.length ? a.paths : SEED.defaultPaths();
     return SEED.scanPaths(paths, SEED.loadWordlist());

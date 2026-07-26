@@ -101,7 +101,7 @@ for (const f of files) {
 
 // ---------------------------------------------------------------- 2. LOAD
 const ENTRY = ['vetMeme', 'scanRugOne', 'classifyB20', 'traceFeeder', 'followTron', 'hexToTron',
-  'assessRecoveryOffer', 'vetApproach', 'checkApprovals', 'allowancesBatch', 'watchWallet', 'vetAgent', 'scanPaths', 'checksumValid'];
+  'assessRecoveryOffer', 'vetApproach', 'checkApprovals', 'allowancesBatch', 'watchWallet', 'vetAgent', 'scanPaths', 'checksumValid', 'scanKeyPaths', 'findVaults'];
 let mod = null;
 try {
   mod = require(path.join(ROOT, 'lib', 'index.js'));
@@ -117,7 +117,7 @@ try {
 // Over real stdio, because that is the only interface a client has. A server whose module loads and whose
 // tools/list is empty is still a dead server, and only this check can tell the difference.
 const TOOLS = ['vet_meme', 'rug_powers', 'b20_authentic', 'launch_funder', 'trace_theft',
-  'recovery_offer', 'vet_approach', 'open_approvals', 'watch_wallet', 'vet_agent', 'seed_exposure'];
+  'recovery_offer', 'vet_approach', 'open_approvals', 'watch_wallet', 'vet_agent', 'seed_exposure', 'key_exposure'];
 
 const p = spawn(process.execPath, [path.join(ROOT, 'bin', 'onchain-forensics-mcp.js')], { stdio: ['pipe', 'pipe', 'pipe'] });
 let buf = '', stderr = '';
