@@ -241,28 +241,34 @@ splitting an identifier silently disabled a rule.
 #### The danger no schema declares: browser control plus a wallet on the same machine
 
 GitHub trending surfaced a project whose pitch is that your agent **inherits your existing logins, cookies and
-extensions** — your real Chrome profile, with in-page tools named , , , ,
-, . Pointed at it,  reported a read-only surface. Correctly, by its own rules: a
-value VERB is required in a name before the schema is examined at all, and browser automation has none. 
-even carries a  field, and it is never reached.
+extensions** — your real Chrome profile, with in-page tools named `snapshot`, `fill`, `click`, `wait`,
+`navigate`, `capture`. Pointed at it, `vet_agent` reported a read-only surface. Correctly, by its own rules: a
+value VERB is required in a name before the schema is examined at all, and browser automation has none by
+design. `fill` even carries a `value` field, and it is never reached.
 
 The danger is not in any tool. It is in what the browser can **reach**. On the machine this was tested from,
- reports **eight** browser wallet vaults on disk, one of them 27 MB of MetaMask state. An agent
+`key_exposure` reports **eight** browser wallet vaults on disk, one of them 27 MB of MetaMask state. An agent
 that can navigate and click inside that profile can drive the wallet, which is a payment surface no input
 schema will ever advertise.
 
 So the check flags the **combination**, never browser control alone — the same tools against a clean container
-are ordinary web automation, and flagging those would get this muted. The second half is checkable:
- is passed in, and comes from the vault sweep.
+are ordinary web automation, and flagging those is how a security tool gets muted. The second half is
+checkable: `localVaults` is passed in by the caller, and comes from the vault sweep.
 
-Getting the detector right took two wrong versions, both kept as test rows. Keyed on VERBS, it fired on five of
-six honest tool sets — a trading agent ( + ), a file manager, a database client, a
-terminal, a CI runner — because  and  are the most generic verbs in software. Keyed on names AND
-schemas, it then MISSED our own Chrome MCP, whose action tools are called  and  while
-taking  and : a false negative, which on a security check is the worse direction. A DOM field
-decides alone now. **A selector or a coordinate exists for exactly one purpose — addressing something
-rendered.**  takes a path,  takes sql,  takes a size, and a git
- takes a  that is a branch; none of them touch a DOM.
+Getting the detector right took two wrong versions, both kept as test rows because they are the interesting
+part. Keyed on VERBS, it fired on five of six honest tool sets — a trading agent (`open_position` +
+`execute_order`), a file manager, a database client, a terminal, a CI runner — because `open` and `execute` are
+the two most generic verbs in software. Keyed on names *and* schemas, it then MISSED our own Chrome MCP, whose
+action tools are called `computer` and `form_input` while taking `ref` and `coordinate`: a false negative, which
+on a security check is the worse direction. A DOM field decides alone now. **A selector or a coordinate exists
+for exactly one purpose — addressing something rendered.** `open_file` takes a path, `execute_query` takes sql,
+`open_position` takes a size, and a git `checkout` takes a `ref` that is a branch; none of them touch a DOM,
+which is why the weak fields like `ref` only count inside a tool set that also navigates.
+
+*(This paragraph shipped once with every backticked identifier missing — "in-page tools named , , , ," —
+because it was written through a shell heredoc where backticks are command substitution. Fixed in the next
+commit. Documenting it because the same class of mistake, a tool used through a layer that silently eats part
+of the input, is what the rest of this file is about.)*
 
 ### On `seed_exposure`, and the false positive it produced on its first real machine
 
