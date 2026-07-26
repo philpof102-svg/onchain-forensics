@@ -18,6 +18,9 @@ const { traceFeeder } = require('../lib/feeder');
 const { whatMoved, readBridgeExit, followTron } = require('../lib/trace');
 const { assessRecoveryOffer } = require('../lib/recovery');
 const { vetApproach } = require('../lib/lure');
+const { checkApprovals } = require('../lib/approvals');
+const { watchWallet } = require('../lib/wallet-watch');
+const { vetAgent } = require('../lib/agent-vet');
 
 const TOOLS = [
   { name: 'vet_meme', description: 'Which contract is the REAL token behind a ticker? A meme symbol routinely has ten or more look-alike contracts across chains, and buying the wrong one is a total loss. Fail-closed from live liquidity: genuine (one contract dominates), ambiguous (top two tied — NEVER certified), impersonation (the address you passed is not the dominant one), thin (nothing credible).',
@@ -54,6 +57,22 @@ const TOOLS = [
       asksToInstall: { type: 'boolean' }, asksForKeyOrSeed: { type: 'boolean' },
       asksForSignature: { type: 'boolean' }, asksForUpfrontPayment: { type: 'boolean' },
       urgency: { type: 'boolean' } }, required: [] } },
+  { name: 'open_approvals', description: 'Which doors into this wallet are still open? An ERC-20 approval is a standing permission to move your tokens without asking again, and it is the most common drain vector that does NOT need the private key: approved once for an unlimited amount, months ago, forgotten. Wallets do not surface these. The load-bearing discipline is that an Approval EVENT IS NOT THE CURRENT STATE — a later approval of zero revokes an earlier one silently — so the log supplies candidate (token, spender) pairs and every one is confirmed by calling allowance() on the chain right now. Four outcomes, never two: live, confirmed-revoked, not-applicable (the call reverted, which is a definitive answer), and COULD-NOT-CHECK. The first draft collapsed the last two and reported forty closed doors having verified nine; an unanswered call is not a closed door. Read-only — it tells you what to revoke, and can never revoke or sign.',
+    inputSchema: { type: 'object', properties: {
+      owner: { type: 'string', description: 'the wallet address to audit' },
+      chain: { type: 'string', description: 'base (default) | ethereum' } }, required: ['owner'] } },
+
+  { name: 'watch_wallet', description: 'What CHANGED around this wallet since we last looked? The other tools answer at a point in time; this one remembers, which is what turns them into a guard. Three unlimited approvals granted last year are a standing condition; a fourth appearing this morning is an event, and only the second deserves to interrupt anyone — a monitor that repeats its standing conditions teaches its reader to close it, and a closed monitor is worth nothing. Detects new live allowances and first-time counterparties, then JUDGES each one against a local known-bad screen and the explorer rather than merely announcing it. Uses transactions, not event logs, because an ERC-20 Transfer log names whoever the emitting contract chose. Reports its own blind spots every run: on a wallet monitor an empty alert list reads as "you are safe". First run is an inventory, not a set of events.',
+    inputSchema: { type: 'object', properties: {
+      owner: { type: 'string', description: 'the wallet address to watch' },
+      chain: { type: 'string', description: 'base (default) | ethereum' },
+      persist: { type: 'boolean', description: 'default true — save state so the NEXT call can diff against it' } }, required: ['owner'] } },
+
+  { name: 'vet_agent', description: 'Is this agent safe to connect to, and safe to pay? Four checkable dangers, none needing trust in a description. It does not exist — a listing is not a service, and paying an endpoint that never answers is the simplest loss available. Its tools can move money — a name is marketing, the input SCHEMA is the capability, and only a QUANTITY field proves a payment surface, because a message has a recipient exactly as a payment does but you cannot move value without saying how much. It asks for key material — a schema field for a private key or seed is the whole attack, declared in the open. Or it is paid to an address with no past. HTTP 401/403 returns `unauditable` rather than unreachable: the agent is running and gated, which is neither a pass nor a fail. Deliberately does NOT grade how good the description reads, because a well-written tool listing is free to fabricate and scoring prose would hand a forgery a good mark. Introspects and never calls a tool.',
+    inputSchema: { type: 'object', properties: {
+      url: { type: 'string', description: "the agent's HTTP MCP endpoint" },
+      payTo: { type: 'string', description: 'optional: the address that would receive payment' },
+      chain: { type: 'string', description: 'base (default)' } }, required: [] } },
 ];
 
 async function callTool(name, a = {}) {
@@ -77,6 +96,15 @@ async function callTool(name, a = {}) {
   }
   if (name === 'recovery_offer') return await assessRecoveryOffer(a);
   if (name === 'vet_approach') return vetApproach(a);
+  if (name === 'open_approvals') {
+    const r = await checkApprovals(a.chain || 'base', a.owner);
+    return r.ok ? r : { error: r.reason };
+  }
+  if (name === 'watch_wallet') {
+    const r = await watchWallet(a.chain || 'base', a.owner, { persist: a.persist !== false });
+    return r.ok ? r : { error: r.reason };
+  }
+  if (name === 'vet_agent') return await vetAgent(a);
   return { error: 'unknown tool: ' + name };
 }
 

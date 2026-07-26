@@ -1,6 +1,6 @@
 # onchain-forensics
 
-Seven checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
+Ten checks you run before you pay, and after you've been robbed. Exposed as an MCP server so an agent can
 call them, and as plain modules so you can call them yourself.
 
 No API keys. No accounts. Every source is a public endpoint. Read-only throughout — nothing here can move
@@ -38,6 +38,9 @@ Three examples, all real, all caught by testing against known answers:
 | `trace_theft` | Where did the stolen funds go? |
 | `recovery_offer` | Is this offer to get my money back the second theft? |
 | `vet_approach` | Is this inbound opportunity a lure? |
+| `open_approvals` | Which doors into my wallet are still open? |
+| `watch_wallet` | What **changed** around this wallet since we last looked? |
+| `vet_agent` | Is this agent safe to connect to, and safe to pay? |
 
 ### The two ideas worth stealing from this repo
 
@@ -101,6 +104,79 @@ your loss back to you: the theft is public, and reciting it proves nothing.
 
 The tool never returns "safe".
 
+### On `open_approvals`, and the all-clear it fabricated in its own first draft
+
+An ERC-20 approval is a standing permission to move your tokens without asking again. It is the most common
+drain route that does **not** need your private key: approved once for an unlimited amount, months ago, to a
+contract you no longer remember. Wallets do not surface these.
+
+The load-bearing rule is that **an `Approval` event is not the current state.** A later approval of zero
+revokes an earlier one and emits its own event; reading the log gives you a list of doors that may or may not
+still be open. So the log is used only to collect candidate `(token, spender)` pairs, and every pair is then
+confirmed by calling `allowance()` on the chain right now.
+
+My first draft of this counted a failed RPC call as a revoked approval. It reported **forty closed doors
+having actually verified nine** — a fabricated all-clear, on the one tool whose entire job is telling you
+what is still open. I had documented that exact fault in someone else's scanner an hour earlier.
+
+The fix is four outcomes rather than two: `live`, `confirmed-revoked`, `not-applicable` (the call reverted,
+which is a definitive answer), and `could-not-check`. That last state is the whole point — an unanswered call
+is not a closed door, and the tool now says so and reports `complete: false`.
+
+Then the unread count was driven to zero for real, by batching every `allowance()` into one `aggregate3`
+call through Multicall3 — one request instead of dozens, so the rate limiting that caused the unread calls
+stops happening. Verified against a live wallet: 11 unread became 0.
+
+### On `watch_wallet`, and why a monitor that repeats itself is worth nothing
+
+Every other tool here answers at a point in time. This one remembers, which is what turns them into a guard.
+
+Three unlimited approvals granted last year are a **standing condition**. A fourth appearing this morning is
+an **event**. Only the second deserves to interrupt anyone — a monitor that re-reports its standing
+conditions every hour trains its reader to close it, and a closed monitor catches nothing. So state is
+persisted per address and the output is a diff.
+
+It also **judges** each new counterparty instead of merely announcing it, because detecting and then
+declining to think is half a product. And it reports its own blind spots on every run: on a wallet monitor,
+an empty alert list reads as *"you are safe"*, so a check that could not run has to say so out loud.
+
+### On `vet_agent`, and why it will not grade a tool description
+
+Agents now call other agents and pay them. Four dangers are checkable without trusting a word of the listing:
+it does not exist; its tools can move money; it asks for key material; or it is paid to an address with no
+past.
+
+The discipline that made this work is that **a name is marketing, the input schema is the capability.** A
+tool called `helpful_assistant` with an `amount` field and a `to` field is a payment tool. And only a
+**quantity** field proves a payment surface — a message has a recipient exactly as a payment does, but you
+cannot move value without saying how much. Keying on recipients alone flagged our own messaging tool.
+
+Two bugs worth repeating because both produced silent passes. A word-boundary regex (`\bsend\b`) matched
+**none** of nine `snake_case` tool names, because an underscore is a word character — `wallet_transfer` never
+matches `\btransfer\b`. And an HTTP 401 was first classified as *unreachable*, when it means the opposite: the
+agent is running and gated. That is `unauditable` — neither a pass nor a fail.
+
+It deliberately does not score how good the description reads, for the same reason `vet_approach` does not:
+a well-written tool listing is free to fabricate, and grading prose hands a forgery a good mark.
+
+### The publish gate, and a test that passed while the server was dead
+
+`npm test` runs `test/publishable.js`, which refuses to call this repo publishable unless every relative
+`require` resolves to a file that is here, `lib/index.js` exports every entry point, and the MCP server boots
+over real stdio and lists all ten tools with usable schemas.
+
+It exists because of one specific failure. `lib/wallet-watch.js` was copied in from the private repo it was
+written in, carrying `require('./screen')` for a file that never came with it. The whole server then died on
+load — every tool gone, not just that one. **The smoke test I had run passed**, because I ran it *before*
+adding that dependency and then copied the changed file over without re-running it.
+
+A stale test feels exactly like a passing one. That is why the correction here is a gate and not a resolution
+to be more careful. The gate's rule is asymmetric on purpose: a require may resolve to nothing **only** if
+the line says `optional-require`, so an absence has to be claimed in the source to be tolerated and silence
+means broken. And a marker that claims optional while sitting outside a `try` is reported as a lie, because a
+marker nobody verifies is just a comment. Both failure modes were reproduced deliberately to confirm the gate
+catches them.
+
 ## Install
 
 ```bash
@@ -108,7 +184,13 @@ git clone https://github.com/philpof102-svg/onchain-forensics
 cd onchain-forensics
 ```
 
-No dependencies to install — it uses only the Node standard library.
+No dependencies to install — it uses only the Node standard library. To check the clone is intact:
+
+```bash
+npm test
+```
+
+That boots the server and verifies all ten tools list, so a broken copy fails here rather than in your client.
 
 ### As an MCP server
 
