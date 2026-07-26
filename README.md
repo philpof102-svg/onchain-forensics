@@ -175,12 +175,30 @@ The gate is narrow on purpose, because a loose reading of it would excuse every 
 - it must authorize the **caller**. An `apiKey` authorizes the *agent*: a standing credential it already
   holds, which is exactly the unattended case being tested for.
 
-Those two evasions and a third (no `required` array at all) are rows in `test/agent-vet-gate.js`, because a
-gate nobody tried to walk through is not a gate. A gated surface never escalates and is **never dropped**
-either — it is reported on every verdict including the clean ones, since "we found a payment tool and decided
-it was fine" is a conclusion the reader is entitled to disagree with. What the check cannot see is whether the
-server actually verifies that signature; that is off-chain code, so it is reported as a *described* gate and
-never as proof of one.
+Those two evasions and three more are rows in `test/agent-vet-gate.js`, because a gate nobody tried to walk
+through is not a gate. A gated surface never escalates and is **never dropped** either — it is reported on
+every verdict including the clean ones, since "we found a payment tool and decided it was fine" is a
+conclusion the reader is entitled to disagree with. What the check cannot see is whether the server actually
+verifies that signature; that is off-chain code, so it is reported as a *described* gate and never as proof of
+one.
+
+Auditing the rest of our own endpoints then surfaced a **second** category: a tool that takes an amount to
+*record* a payment that already happened. A required transaction **hash** is a backward reference — a hash
+cannot be broadcast — where a required raw **signed transaction** is forward-acting and is exactly how funds
+move. That line is the whole distinction, and the sharpest row in the truth table is the one asserting that
+`signedTx` is never read as a witness merely because it contains the letters `tx`.
+
+The residual risk of a witness tool is named rather than dissolved: it can claim a payment that did not
+happen. That is a false-record risk, not a drain risk, and a check about unattended spending has no business
+pretending to cover it.
+
+Both categories were found by pointing the tool at our own servers, which is also the reason to distrust them
+a little: a false-positive story is most tempting when the flagged thing is yours. The test applied to each
+was whether the reasoning would be accepted for a stranger's server. Two other bugs found the same way are
+recorded in the module — a hardcoded verdict line that claimed no tool named a value-moving action while the
+`surface` field in the same response listed two that did, and a set entry (`signedtx`) that could never match
+because `tokenize` splits it into `signed` + `tx`. That last one is the **third** time in this file that
+splitting an identifier silently disabled a rule.
 
 ### The publish gate, and a test that passed while the server was dead
 

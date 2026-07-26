@@ -55,9 +55,36 @@ const CASES = [
   ['key material still outranks the gate', 'wantsSecret', {
     name: 'import_wallet',
     inputSchema: { type: 'object', properties: { privateKey: {}, signature: {} }, required: ['privateKey', 'signature'] } }],
+
+  // --- the witness category, found the same way: the check flagged a real settlement-recording tool --------
+
+  // The real tool. It records a USDC transfer that already happened, by hash, and its own description says the
+  // node moves no funds. A required hash is a backward reference and cannot be broadcast.
+  ['real tool, records a settlement by txHash', 'witnessesPayment', {
+    name: 'lawbor_settle',
+    inputSchema: { type: 'object', properties: { to: {}, jobId: {}, txHash: {}, amountMicro: {} },
+      required: ['to', 'jobId', 'txHash', 'amountMicro'] } }],
+
+  // EVASION 4 — an optional hash proves nothing: the tool can be called without it.
+  ['EVASION: txHash present but optional', 'movesValue', {
+    name: 'settle_payment',
+    inputSchema: { type: 'object', properties: { to: {}, amount: {}, txHash: {} }, required: ['to', 'amount'] } }],
+
+  // EVASION 5 — the sharpest one. A raw signed transaction is FORWARD-acting: handing it to a server is how
+  // funds move. It must never be read as a witness just because it contains the letters "tx". (It lands in
+  // callerSigned, since the caller did sign it — but never in the witness bucket.)
+  ['EVASION: signedTx is forward-acting, not a witness', 'callerSigned', {
+    name: 'broadcast_transfer',
+    inputSchema: { type: 'object', properties: { amount: {}, signedTx: {} }, required: ['amount', 'signedTx'] } }],
+
+  // Both gates present: the signature is the stronger, more specific claim and wins.
+  ['signature and txHash together report as caller-signed', 'callerSigned', {
+    name: 'settle_signed',
+    inputSchema: { type: 'object', properties: { amount: {}, txHash: {}, signature: {} },
+      required: ['amount', 'txHash', 'signature'] } }],
 ];
 
-const BUCKETS = ['movesValue', 'callerSigned', 'namedButNoSurface', 'wantsSecret', 'readOnly'];
+const BUCKETS = ['movesValue', 'callerSigned', 'witnessesPayment', 'namedButNoSurface', 'wantsSecret', 'readOnly'];
 let failed = 0;
 for (const [label, expected, tool] of CASES) {
   const r = auditTools([tool]);
@@ -67,7 +94,10 @@ for (const [label, expected, tool] of CASES) {
   process.stdout.write(`  ${ok ? 'ok  ' : 'FAIL'} ${label}\n`);
   if (!ok) process.stdout.write(`       expected ${expected}, got ${got}\n`);
 }
+// Counted, not asserted. This line said "the 3 attempts" for two more rows than that, which is the same fault
+// the verdict text in agent-vet.js had — a hardcoded summary drifting away from what it summarises.
+const evasions = CASES.filter(([label]) => label.startsWith('EVASION')).length;
 process.stdout.write('\n' + (failed
   ? `${failed} case(s) failed\n`
-  : `all ${CASES.length} cases hold, including the 3 attempts to walk through the gate\n`));
+  : `all ${CASES.length} cases hold, including ${evasions} attempts to walk through the gate\n`));
 process.exit(failed ? 1 : 0);
