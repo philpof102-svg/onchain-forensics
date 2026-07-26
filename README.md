@@ -91,6 +91,42 @@ The false-positive test earned its keep on the first run: a version keyed on bra
 `meet.google.com` — Google Meet, the real one — as impersonation. A tool that warns about Google Meet is a
 tool people uninstall.
 
+#### Then the lure was pointed at this tool, and three things came out of it
+
+The domain in that approach is still live months later, so it could be replayed against the module written
+because of it. That is the only test worth much on a tool like this, and it found more than it confirmed.
+
+**The stated rule was not the implemented rule.** The output printed *"a real podcast records in your
+browser"* while nothing in the code applied it. `vetApproach` took booleans — `asksToInstall`, `asksForSeed` —
+so the caller had to have *already decided* that the message asks you to install something. That is the hard
+part. It made this a checklist rather than a check: fine for a careful human, useless to an agent handed a raw
+email. It now accepts `message` and reads the ask out of the text, and the composition is fail-closed by
+construction — the scan can only ever **add** a flag, never clear one a caller set deliberately, because a
+heuristic may accuse and must never acquit.
+
+**`calendly.com` was reported as "not a platform this recognises"** — the `meet.google.com` mistake again,
+wearing different clothes. And the fix is the interesting part: in the real approach, **the Calendly link was
+genuine**. A real account on a real service. So Calendly is neither a flag nor a comfort, and it now returns
+`recognised_neutral` with that said out loud — *legitimate infrastructure is the cover, not the tell*. A brand
+sitting under a domain that does not own it is still impersonation; `calendly.evil.com` is a row in the test.
+
+**The headline was the weaker of two true findings.** `reason` was `flags[0]` — whichever check happened to
+push first — and on the real message that surfaced "a link points at a domain that is not a recognised
+platform" while burying "they want the conversation moved into a chat app to hand you a file". Both were
+reported; only one is worth acting on. Push order is not a priority, and on a security tool the first line is
+what the reader acts on, so the most specific flag now leads.
+
+Worth stating because it is the opposite of a triumphant demo: replayed on the email text alone, the verdict is
+`high_risk`, **not** `fraud`. That is correct rather than a miss. Nothing in that message is provably
+fraudulent — it is the `wechat.web09eu.com` link that is, and adding it flips the verdict. A tool that cried
+fraud on the text would have been right by luck, and would cry fraud on real podcast invitations too.
+
+Two of the three "defects" I first reported here were my own misuse: `registrableDomain` takes a hostname and
+I passed it a URL, and `vetApproach` takes booleans and I passed prose. The code did exactly what it said. But
+a public helper whose most likely misuse returns silent garbage — `https://beaconlayer.co/` in, the whole URL
+back out, no throw — is a defect anyway, because nobody re-reads a docstring to check an answer that looks
+fine. It accepts a URL, a hostname or an email address now.
+
 ### On `recovery_offer`
 
 This is the only tool here that can answer with certainty rather than a score, and it is the one most likely
