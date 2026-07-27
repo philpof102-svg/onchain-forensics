@@ -191,6 +191,41 @@ t('les deux copies produisent LES MEMES CLES (garde structurelle, pas un inventa
     'cle(s) presente(s) d\'un seul cote et non justifiee(s): ' + ecart.join(', '));
 });
 
+/* Meme principe applique a une FONCTION plutot qu'a un objet: on fait passer les deux copies par les memes
+ * reponses RPC bouchonnees et on compare les sorties. Une divergence de semantique — un revert lu comme
+ * « non verifie » d'un cote et « rien ici » de l'autre — rougit sans qu'on ait eu a l'anticiper. */
+t('liveAllowance rend LES MEMES verdicts des deux cotes (comportement, pas propriete)', async () => {
+  if (!fs.existsSync(path.join(__dirname, '..', '..', 'biii', 'lib', 'approvals.js'))) {
+    console.log('       ⚠ SAUTE — biii/lib/approvals.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/approvals');
+  const la = require(path.join(__dirname, '..', '..', 'biii', 'lib', 'approvals'));
+  const REPONSES = [
+    ['allowance vivante', { result: '0x' + '0'.repeat(63) + '5' }],
+    ['zero', { result: '0x' + '0'.repeat(64) }],
+    ['reponse vide', { result: '0x' }],
+    ['revert', { error: { message: 'execution reverted' } }],
+    ['forme illisible', { result: '0xzz' }],
+    ['pas de reponse', null],
+  ];
+  const etiquette = (v) => (typeof v) + ':' + String(v);
+  for (const [nom, rep] of REPONSES) {
+    const opts = { attempts: 1, postImpl: async () => rep };
+    const [a, b] = [await ici.liveAllowance('base', adr(2), adr(1), adr(3), opts),
+      await la.liveAllowance('base', adr(2), adr(1), adr(3), opts)];
+    assert.strictEqual(etiquette(a), etiquette(b),
+      nom + ': ici=' + etiquette(a) + ' | biii=' + etiquette(b));
+  }
+  /* Sanity: la comparaison ne serait pas concluante si TOUTES les reponses donnaient la meme sortie —
+   * deux copies egalement cassees passeraient. On exige que les six cas produisent plusieurs verdicts. */
+  const sorties = new Set();
+  for (const [, rep] of REPONSES) {
+    sorties.add(etiquette(await ici.liveAllowance('base', adr(2), adr(1), adr(3), { attempts: 1, postImpl: async () => rep })));
+  }
+  assert.ok(sorties.size >= 3, 'six entrees opposees doivent donner au moins trois verdicts distincts, sinon ce cas ne mesure rien');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
