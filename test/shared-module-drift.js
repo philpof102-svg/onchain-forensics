@@ -146,6 +146,51 @@ t('le filtre de chaine accepte slug ET identifiant, et refuse ce qu il ne sait p
   assert.strictEqual(candidatesFrom(paires, 'X').length, 2, 'sans filtre, toutes concourent');
 });
 
+/* ── UNE GARDE QUI DECOUVRE, AU LIEU DE VERIFIER UNE LISTE ───────────────────────────────────────────
+ * Le 2026-07-28, ce fichier est passe 7/7 pendant que la copie d'agent-vet portait exactement le defaut
+ * qui venait d'etre corrige dans biii (le crible known-bad aplati sur un booleen). Il ne pouvait pas le
+ * voir: chaque cas ci-dessus epingle une propriete ECRITE A LA MAIN, donc la garde ne connait que les
+ * derives auxquelles quelqu'un a deja pense. C'est un inventaire, pas un detecteur.
+ *
+ * Ce cas-ci compare les ENSEMBLES DE CLES que les deux copies produisent pour une entree identique. Un
+ * champ ajoute d'un seul cote rougit sans que personne ne l'ait prevu — y compris les champs qui
+ * n'existent pas encore.
+ *
+ * Trois etats, pas deux: `compare`, `derive`, et `saute` quand le depot biii n'est pas a cote. Un saut
+ * SILENCIEUX serait la faute meme que ce fichier traque — une lecture non faite qui ressemble a une
+ * lecture propre. Il s'annonce donc, et dit pourquoi. */
+const fs = require('node:fs');
+const path = require('node:path');
+const VOISIN = path.join(__dirname, '..', '..', 'biii', 'lib', 'agent-vet.js');
+
+t('les deux copies produisent LES MEMES CLES (garde structurelle, pas un inventaire)', async () => {
+  if (!fs.existsSync(VOISIN)) {
+    /* Pas un echec: hors de la machine de dev, biii n'est pas un voisin, et rougir ici bloquerait la
+     * publication pour une raison qui n'est pas le code. Mais ca se DIT. */
+    console.log('       ⚠ SAUTE — ' + VOISIN + ' absent: la comparaison inter-depots n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/agent-vet');
+  const la = require(VOISIN);
+  /* Pas d'url: l'introspection reseau est sautee des deux cotes, la comparaison reste deterministe. */
+  const opts = { payTo: '0x' + '1'.repeat(40) };
+  const [a, b] = [await ici.vetAgent(opts), await la.vetAgent(opts)];
+
+  const cles = (o) => (o && typeof o === 'object' ? Object.keys(o).sort() : []);
+  assert.deepStrictEqual(cles(a.payment), cles(b.payment),
+    'payment a derive entre les deux copies — ici: ' + cles(a.payment).join(',')
+    + ' | biii: ' + cles(b.payment).join(','));
+
+  /* Au premier niveau, une difference peut etre LEGITIME (le paquet forensique n'expose pas la meme
+   * surface). Chaque ecart tolere doit donc etre nomme ici, avec sa raison — une liste vide veut dire
+   * qu'aucun ecart n'est justifie a ce jour. */
+  const TOLERE = new Set([]);
+  const ecart = [...new Set([...cles(a), ...cles(b)])]
+    .filter((k) => (k in a) !== (k in b) && !TOLERE.has(k));
+  assert.deepStrictEqual(ecart, [],
+    'cle(s) presente(s) d\'un seul cote et non justifiee(s): ' + ecart.join(', '));
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
