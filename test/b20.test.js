@@ -97,6 +97,31 @@ const muet = async () => null;                                    // le RPC n'a 
     assert.equal(r.codeBytes, 32);
   });
 
+  await t('EIP-7702: un EOA DELEGUE porte du code prefixe 0xef et n est PAS un B20', async () => {
+    /* LA CORRECTION DU 2026-07-27, quelques heures apres le premier correctif.
+     *
+     * J'avais justifie l'egalite exacte par « EIP-3541 interdit de deployer du code commencant par 0xEF,
+     * donc le marqueur est infalsifiable ». C'est FAUX: EIP-3541 ne contraint que le chemin de CREATION.
+     * EIP-7702 pose couramment du code prefixe 0xEF sur des EOA ordinaires — un indicateur de delegation
+     * vaut exactement `0xef0100 || <20 octets d'adresse>`, soit 23 octets.
+     *
+     * Corrobore sur Base en lisant le bytecode de 0xdfac5e91fd27451123133da9f71d68c0b247b4de, qui contient
+     * un validateur explicite de cette forme: longueur 0x17, puis les octets ef, 01, 00, puis l'adresse a
+     * l'offset 0x23. Un contrat qui valide le motif existe parce que le motif est courant.
+     *
+     * Ce qui garantit reellement, c'est l'EGALITE EXACTE et rien d'autre: un natif fait UN octet, une
+     * delegation en fait VINGT-TROIS. Ce test existe pour que personne ne relache en startsWith. */
+    const DELEGATION = '0xef0100dfac5e91fd27451123133da9f71d68c0b247b4de';
+    assert.equal((DELEGATION.length - 2) / 2, 23, "un indicateur 7702 fait 23 octets");
+    assert.equal(DELEGATION.startsWith('0xef'), true,
+      'le piege est reel: un startsWith passerait');
+
+    const r = await classifyB20('base', NATIF, { rpcImpl: async () => DELEGATION });
+    assert.equal(r.verdict, 'prefix_impostor',
+      'un EOA delegue a un b200 vanity ne doit JAMAIS lire comme un B20 authentique');
+    assert.equal(r.isNativeB20, false);
+    assert.equal(r.codeBytes, 23);
+  });
   await t('le marqueur est insensible a la casse — pas d echappatoire par 0xEF majuscule', async () => {
     const maj = await classifyB20('base', NATIF, { rpcImpl: async () => '0xEF' });
     assert.equal(maj.verdict, 'native_b20');
