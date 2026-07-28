@@ -259,6 +259,46 @@ t('judgeCounterparty rend LES MEMES phrases des deux cotes', async () => {
   assert.ok(sorties.size >= 4, 'six entrees opposees doivent donner au moins quatre phrases distinctes');
 });
 
+/* Quatrieme garde par comparaison de comportement. Les deux copies balaient le MEME dossier temporaire et
+ * doivent rendre le meme drapeau de couverture et les memes compteurs. Le dossier est cree puis supprime:
+ * on ne balaie jamais un vrai repertoire de l'utilisateur depuis un test. */
+t('scanPaths rend la MEME couverture des deux cotes', async () => {
+  const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'seedscan.js');
+  if (!fs.existsSync(voisin)) {
+    console.log('       ⚠ SAUTE — biii/lib/seedscan.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const os = require('node:os');
+  const ici = require('../lib/seedscan');
+  const la = require(voisin);
+  const bac = path.join(os.tmpdir(), 'drift-seedscan-' + process.pid);
+  fs.mkdirSync(bac, { recursive: true });
+  fs.writeFileSync(path.join(bac, 'n.txt'), 'texte ordinaire');
+  fs.writeFileSync(path.join(bac, 'a.png'), 'x');
+  try {
+    const idxA = ici.loadWordlist(), idxB = la.loadWordlist();
+    const cas = [
+      ['portee voulue', [bac], {}],
+      ['chemin absent', [bac, path.join(bac, 'nope')], {}],
+      ['lecture bloquee', [bac], { maxFiles: 0 }],
+    ];
+    const vus = new Set();
+    for (const [nom, chemins, opts] of cas) {
+      const a = ici.scanPaths(chemins, idxA, opts);
+      const b = la.scanPaths(chemins, idxB, opts);
+      assert.strictEqual(a.complete, b.complete, nom + ': `complete` a derive');
+      assert.deepStrictEqual(a.skipped, b.skipped, nom + ': les compteurs ont derive');
+      vus.add(String(a.complete) + JSON.stringify(a.skipped));
+    }
+    /* Sanity: trois entrees opposees doivent donner trois etats distincts, sinon deux copies egalement
+     * cassees s'accorderaient et ce cas ne mesurerait rien. */
+    assert.strictEqual(vus.size, 3, 'trois cas opposes doivent produire trois etats distincts');
+  } finally {
+    fs.rmSync(bac, { recursive: true, force: true });
+    assert.strictEqual(fs.existsSync(bac), false, 'la fixture doit etre supprimee');
+  }
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
