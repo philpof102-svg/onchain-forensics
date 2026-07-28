@@ -299,6 +299,46 @@ t('scanPaths rend la MEME couverture des deux cotes', async () => {
   }
 });
 
+/* Cinquieme garde par comparaison de comportement — la plus sensible: `whatMoved` repond a « qu'est-ce
+ * qui a bouge ? » et sa sortie finit dans un document qu'une personne lit sur sa propre perte. Une
+ * divergence entre les deux copies y produirait deux recits differents du meme vol. */
+t('whatMoved rend LES MEMES mouvements des deux cotes', async () => {
+  const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'trace.js');
+  if (!fs.existsSync(voisin)) {
+    console.log('       ⚠ SAUTE — biii/lib/trace.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/trace');
+  const la = require(voisin);
+  const TX = '0x' + 'ab'.repeat(32);
+  const SIGNEUR = adr(1);
+  const tx = { hash: TX, from: { hash: SIGNEUR }, to: { hash: adr(2) }, value: '0' };
+  const tr = (from, dec, val) => ({ items: [{ from: { hash: from }, to: { hash: adr(3) },
+    token: { symbol: 'T' }, total: { decimals: dec, value: val } }] });
+  const rpc = (second) => async (u) => (u.includes('token-transfers') ? second : tx);
+
+  const CAS = [
+    ['USDC 6 decimales', rpc(tr(SIGNEUR, 6, '1000000'))],
+    ['decimale absente', rpc(tr(SIGNEUR, undefined, '1000000'))],
+    ['jeton 0 decimale', rpc(tr(SIGNEUR, 0, '5'))],
+    ['transfert forge', rpc(tr(adr(9), 6, '1000000'))],
+    ['liste vide', rpc({ items: [] })],
+    ['liste non lue', rpc(null)],
+  ];
+  const vus = new Set();
+  for (const [nom, impl] of CAS) {
+    const a = await ici.whatMoved('base', TX, impl);
+    const b = await la.whatMoved('base', TX, impl);
+    /* Le montant ET le drapeau d'authenticite: un ecart sur l'un ou l'autre change le recit. */
+    assert.deepStrictEqual(a.transfers.map((m) => [m.amount, m.decimals, m.authentic]),
+      b.transfers.map((m) => [m.amount, m.decimals, m.authentic]), nom + ': les mouvements ont derive');
+    assert.strictEqual(a.transfersRead, b.transfersRead, nom + ': `transfersRead` a derive');
+    assert.strictEqual(a.forgedTransfers, b.forgedTransfers, nom + ': le compte de forges a derive');
+    vus.add(JSON.stringify([a.transfersRead, a.forgedTransfers, a.transfers.map((m) => m.amount)]));
+  }
+  assert.ok(vus.size >= 4, 'six cas opposes doivent produire au moins quatre etats distincts');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
