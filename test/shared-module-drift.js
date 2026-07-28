@@ -434,6 +434,45 @@ t('scanRug decoupe et plafonne PAREIL des deux cotes', async () => {
   assert.strictEqual(vus.size, 3, 'trois tailles opposees doivent produire trois etats distincts');
 });
 
+/* Neuvieme garde: findVaults. Un ecart ici veut dire que le meme disque produit deux comptes de coffres
+ * differents selon le paquet utilise — sur une question de materiel de cle, c'est le pire endroit ou
+ * diverger. Le bouchon ne touche AUCUN fichier reel. */
+t('findVaults compte et signale PAREIL des deux cotes', async () => {
+  const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'keyscan.js');
+  if (!fs.existsSync(voisin)) {
+    console.log('       ⚠ SAUTE — biii/lib/keyscan.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/keyscan');
+  const la = require(voisin);
+  const EST_COFFRE = /Local Extension Settings/;
+  const disque = (mode) => ({
+    home: '/faux',
+    fs: {
+      existsSync: () => true,
+      readdirSync: (p) => {
+        if (EST_COFFRE.test(p)) {
+          if (mode === 'coffre-verrouille') { const e = new Error('x'); e.code = 'EACCES'; throw e; }
+          return ['000001.log', 'MANIFEST'];
+        }
+        if (mode === 'base-verrouillee') { const e = new Error('x'); e.code = 'EPERM'; throw e; }
+        return [{ name: 'Default', isDirectory: () => true }];
+      },
+      statSync: (p) => { if (mode === 'stat-rate' && /000001/.test(p)) throw new Error('EBUSY'); return { size: 1000 }; },
+    },
+  });
+  const vus = new Set();
+  for (const mode of ['ok', 'base-verrouillee', 'coffre-verrouille', 'stat-rate']) {
+    const [a, b] = [ici.findVaults({ deps: disque(mode) }), la.findVaults({ deps: disque(mode) })];
+    const sig = (r) => r.length + ':' + r.filter((x) => x.unreadable).length + ':'
+      + JSON.stringify([...new Set(r.map((x) => x.bytes))].sort());
+    assert.strictEqual(sig(a), sig(b), mode + ': findVaults a derive — ici=' + sig(a) + ' biii=' + sig(b));
+    vus.add(sig(a));
+  }
+  /* Sanity: quatre situations opposees doivent produire au moins trois etats distincts. */
+  assert.ok(vus.size >= 3, 'quatre situations opposees doivent produire au moins trois etats distincts');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
