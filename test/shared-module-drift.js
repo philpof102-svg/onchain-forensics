@@ -226,6 +226,39 @@ t('liveAllowance rend LES MEMES verdicts des deux cotes (comportement, pas propr
   assert.ok(sorties.size >= 3, 'six entrees opposees doivent donner au moins trois verdicts distincts, sinon ce cas ne mesure rien');
 });
 
+/* Troisieme garde par COMPARAISON DE COMPORTEMENT. Les deux copies jugent la meme contrepartie a partir
+ * des memes reponses d'explorateur bouchonnees, et on compare les phrases rendues. Une divergence de
+ * semantique rougit sans qu'on ait eu a nommer le champ concerne a l'avance. */
+t('judgeCounterparty rend LES MEMES phrases des deux cotes', async () => {
+  if (!fs.existsSync(path.join(__dirname, '..', '..', 'biii', 'lib', 'wallet-watch.js'))) {
+    console.log('       ⚠ SAUTE — biii/lib/wallet-watch.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/wallet-watch');
+  const la = require(path.join(__dirname, '..', '..', 'biii', 'lib', 'wallet-watch'));
+  const REPONSES = [
+    ['reponse vide', {}],
+    ['contrat sans is_verified', { is_contract: true }],
+    ['contrat non verifie', { is_contract: true, is_verified: false }],
+    ['contrat verifie', { is_contract: true, is_verified: true, name: 'USDC' }],
+    ['portefeuille explicite', { is_contract: false }],
+    ['explorateur muet', null],
+  ];
+  /* Le crible known-bad depend du plancher local de chaque depot: on ne compare que la nature. */
+  const nature = (r) => r.notes.filter((n) => !/known-bad/.test(n)).join(' | ');
+  const sorties = new Set();
+  for (const [nom, rep] of REPONSES) {
+    const [a, b] = [await ici.judgeCounterparty('http://x', adr(1), async () => rep),
+      await la.judgeCounterparty('http://x', adr(1), async () => rep)];
+    assert.strictEqual(nature(a), nature(b), nom + ' a derive');
+    assert.strictEqual(String(a.severity), String(b.severity), nom + ': severite divergente');
+    sorties.add(nature(a));
+  }
+  /* Sanity: si les six reponses donnaient la meme phrase, deux copies egalement cassees passeraient et ce
+   * cas ne mesurerait rien. */
+  assert.ok(sorties.size >= 4, 'six entrees opposees doivent donner au moins quatre phrases distinctes');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
