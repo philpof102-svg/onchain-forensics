@@ -339,6 +339,75 @@ t('whatMoved rend LES MEMES mouvements des deux cotes', async () => {
   assert.ok(vus.size >= 4, 'six cas opposes doivent produire au moins quatre etats distincts');
 });
 
+/* ── LE CAS LE PLUS BETE, ET CELUI QUI MANQUAIT ─────────────────────────────────────────────────────
+ * Le 2026-07-28 un port fait en shell a remplace `getJSON(api` PARTOUT dans ce fichier alors que la
+ * variable de remplacement n'etait declaree que dans une seule fonction. `readBridgeExit` referencait
+ * donc un `lire` inexistant et jetait un ReferenceError DES LE PREMIER APPEL — et `npm test` sortait
+ * vert a 28/28, parce qu'aucun test n'appelait cette fonction. `node --check` ne pouvait rien voir: une
+ * variable non definie est une erreur d'EXECUTION, pas de syntaxe.
+ *
+ * Ce cas n'assertit presque rien sur le fond: il APPELLE chaque export asynchrone avec un bouchon, et
+ * exige qu'aucun ne jette. C'est le filet minimal qu'un export sans test dedie merite, et il aurait
+ * suffi a attraper la casse. */
+t('chaque export asynchrone de trace repond sans jeter (filet anti-ReferenceError)', async () => {
+  const T = require('../lib/trace');
+  const TX = '0x' + 'ab'.repeat(32);
+  const bouchon = async () => ({ hash: TX, from: { hash: adr(1) }, to: { hash: adr(2) }, value: '0' });
+  const appels = [
+    ['whatMoved', () => T.whatMoved('base', TX, bouchon)],
+    ['readBridgeExit', () => T.readBridgeExit('base', TX, bouchon)],
+    ['followTron', () => T.followTron('T' + 'A'.repeat(33), { maxHops: 1, lireJson: async () => ({ data: [] }) })],
+  ];
+  for (const [nom, appel] of appels) {
+    let r;
+    try { r = await appel(); } catch (e) { assert.fail(nom + ' a JETE: ' + e.constructor.name + ': ' + e.message); }
+    assert.strictEqual(typeof r, 'object', nom + ' doit rendre un objet');
+    assert.notStrictEqual(r, null, nom + ' ne doit pas rendre null');
+  }
+});
+
+/* Sixieme et septieme gardes par comparaison de comportement, pour les deux fonctions portees. */
+t('readBridgeExit et followTron rendent LA MEME chose des deux cotes', async () => {
+  const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'trace.js');
+  if (!fs.existsSync(voisin)) {
+    console.log('       ⚠ SAUTE — biii/lib/trace.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/trace');
+  const la = require(voisin);
+  const TX = '0x' + 'ab'.repeat(32);
+  const ADR = 'T' + 'A'.repeat(33);
+  const COMPTE = { data: [{ balance: 5000000, create_time: 1700000000000 }] };
+
+  const PONTS = [
+    ['non decode', async () => ({ hash: TX })],
+    ['decode, sans id', async () => ({ hash: TX, decoded_input: { parameters: [] } })],
+  ];
+  for (const [nom, impl] of PONTS) {
+    const [a, b] = [await ici.readBridgeExit('base', TX, impl), await la.readBridgeExit('base', TX, impl)];
+    assert.strictEqual(a.calldataDecoded, b.calldataDecoded, nom + ': calldataDecoded a derive');
+    assert.strictEqual(a.note, b.note, nom + ': la note a derive');
+  }
+
+  const PISTES = [
+    ['liste non lue', async (u) => (u.includes('/transactions') ? null : COMPTE)],
+    ['vraie fin', async (u) => (u.includes('/transactions') ? { data: [] } : COMPTE)],
+    ['compte non lu', async (u) => (u.includes('/transactions') ? { data: [] } : null)],
+  ];
+  const vus = new Set();
+  for (const [nom, impl] of PISTES) {
+    const [a, b] = [await ici.followTron(ADR, { maxHops: 2, lireJson: impl }),
+      await la.followTron(ADR, { maxHops: 2, lireJson: impl })];
+    assert.strictEqual(a.stoppedBecause, b.stoppedBecause, nom + ': la raison d\'arret a derive');
+    assert.strictEqual(a.complete, b.complete, nom + ': `complete` a derive');
+    assert.strictEqual(a.hops[0].balanceTrx, b.hops[0].balanceTrx, nom + ': le solde a derive');
+    vus.add(String(a.stoppedBecause) + ':' + String(a.hops[0].balanceTrx));
+  }
+  /* Sanity: trois situations opposees doivent donner trois etats distincts, sinon deux copies egalement
+   * cassees s'accorderaient et ce cas ne mesurerait rien. */
+  assert.strictEqual(vus.size, 3, 'trois situations opposees doivent produire trois etats distincts');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
