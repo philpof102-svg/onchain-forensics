@@ -488,10 +488,19 @@ t('findVaults compte et signale PAREIL des deux cotes', async () => {
  * nulle part. Un garde vert parce qu'il ne regarde pas au bon endroit est le meme motif que tout ce que
  * cette journee a corrige, applique au garde lui-meme.
  *
- * CE QU'ON NE FAIT PAS ICI: porter les correctifs. Ces copies ont diverge en profondeur — 254 lignes
- * n'existent que dans la version publiee de `lure.js`, 119 dans `recovery.js`. Ce n'est pas un port
- * mecanique, c'est une decision de fusion sur un paquet publie. Un port au shell dans un fichier
- * divergent est exactement ce qui a laisse une ReferenceError sur master le 2026-07-28.
+ * ⚠️ CORRECTION D'UN CHIFFRE QUE J'AI PUBLIE ICI. Le commit qui a introduit ce bloc affirmait « 254
+ * lignes n'existent que dans la version publiee de lure.js, 119 dans recovery.js ». C'ETAIT FAUX: un
+ * artefact de fins de ligne. Ce depot est en CRLF, `biii` en LF, donc `diff` declarait presque chaque
+ * ligne differente. Normalise, l'ecart tombe a QUATRE lignes par fichier. Deux mesures du meme objet
+ * qui divergent — ma propre regle — et je l'ai publiee avant de la valider.
+ *
+ * CE QU'ON NE FAIT PAS ICI: porter les correctifs. La conclusion tient, mais pour la VRAIE raison, qui
+ * est plus serieuse que la fausse: la copie publiee a UNE GENERATION DE RETARD, pas quatre lignes.
+ * `lib/lure.js` ici ne contient ni `domainFacts`, ni `brandInRegistrable`, ni `GENERIC_WORDS` — toute
+ * une couche que `biii` a gagnee et sur laquelle le correctif du jour s'appuie. Porter, c'est donc soit
+ * amener la couche entiere, soit ecrire une variante autonome: une decision sur ce que ce paquet doit
+ * absorber de l'evolution du jumeau, pas un transplant. Un port au shell dans un fichier divergent est
+ * par ailleurs exactement ce qui a laisse une ReferenceError sur master le 2026-07-28.
  *
  * CE QU'ON FAIT: declarer le trou. La liste des modules PARTAGES, DIVERGENTS et sans aucune comparaison
  * est epinglee ci-dessous. Elle a le droit de retrecir; si elle GRANDIT, ce test rougit — un nouveau
