@@ -473,6 +473,78 @@ t('findVaults compte et signale PAREIL des deux cotes', async () => {
   assert.ok(vus.size >= 3, 'quatre situations opposees doivent produire au moins trois etats distincts');
 });
 
+/* ════════════════════════════════════════════════════════════════════════════════════════════════════
+ * CE DETECTEUR NE SIGNALE PAS CE QU'IL NE REGARDE PAS.
+ *
+ * Mesure du 2026-07-28. Sept correctifs faits dans `biii` le meme jour sont ABSENTS de ce paquet —
+ * publie sur npm, donc les defauts partent chez des utilisateurs:
+ *
+ *   agent-vet (port jete)      feeder (siblingsRead)     holders-health (concentrationDiscriminating)
+ *   lure (userinfoNote)        meme (not_a_candidate)    recovery (chainRead)
+ *   rugsignals (verrouillesIllisibles)
+ *
+ * Et ce fichier etait VERT pendant ce temps, parce qu'il compare le comportement de fonctions
+ * ENUMEREES: aucune de celles qui ont change n'y figurait, et `lure` comme `recovery` ne sont cites
+ * nulle part. Un garde vert parce qu'il ne regarde pas au bon endroit est le meme motif que tout ce que
+ * cette journee a corrige, applique au garde lui-meme.
+ *
+ * CE QU'ON NE FAIT PAS ICI: porter les correctifs. Ces copies ont diverge en profondeur — 254 lignes
+ * n'existent que dans la version publiee de `lure.js`, 119 dans `recovery.js`. Ce n'est pas un port
+ * mecanique, c'est une decision de fusion sur un paquet publie. Un port au shell dans un fichier
+ * divergent est exactement ce qui a laisse une ReferenceError sur master le 2026-07-28.
+ *
+ * CE QU'ON FAIT: declarer le trou. La liste des modules PARTAGES, DIVERGENTS et sans aucune comparaison
+ * est epinglee ci-dessous. Elle a le droit de retrecir; si elle GRANDIT, ce test rougit — un nouveau
+ * module ne peut plus rejoindre l'angle mort en silence.
+ */
+/* Mesure du 2026-07-28 avec le critere valide ci-dessous: 8 modules partages sur 15 sont reellement
+ * charges depuis le jumeau. Les sept ci-dessous divergent sans qu'aucune comparaison ne les regarde —
+ * et CINQ d'entre eux sont exactement ceux corriges dans biii ce jour-la. Ce n'est pas une coincidence:
+ * l'angle mort EST la raison pour laquelle la derive n'a jamais ete vue. */
+const NON_COUVERTS_CONNUS = new Set([
+  'bip39-english.js',    // liste de mots statique: rien a comparer en comportement
+  'feeder.js',           // ⚠️ correctif siblingsRead (2026-07-28) absent de ce paquet
+  'holders-health.js',   // ⚠️ correctif concentrationDiscriminating absent
+  'lure.js',             // ⚠️ correctif userinfo (le truc du « @ ») absent
+  'meme.js',             // ⚠️ correctif not_a_candidate absent
+  'multicall.js',        // controle LOCAL du texte source seulement: ne detecte aucune derive
+  'recovery.js',         // ⚠️ correctif chainRead absent
+]);
+
+t('★ aucun module partage ne rejoint l angle mort en silence', () => {
+  const dirA = path.join(__dirname, '..', '..', 'biii', 'lib');
+  if (!fs.existsSync(dirA)) {
+    console.log('       (saute: le depot biii n est pas a cote — un saut ANNONCE, jamais un vert muet)');
+    return;
+  }
+  const source = fs.readFileSync(__filename, 'utf8');
+  const partages = fs.readdirSync(path.join(__dirname, '..', 'lib'))
+    .filter((f) => f.endsWith('.js') && fs.existsSync(path.join(dirA, f)));
+  /* ⚠️ LE CRITERE A ETE VALIDE AVANT D'ETRE CRU. Un premier jet cherchait le nom du module n'importe ou
+   * dans ce fichier — il comptait donc `multicall` comme couvert parce qu'il est cite dans un
+   * commentaire d'en-tete, et l'aurait compte couvert pour n'importe quelle mention. Or « etre nomme »
+   * n'est pas « etre compare »: `multicall` n'est lu QUE dans la copie locale, un controle de propriete
+   * du texte qui ne peut detecter aucune derive.
+   *
+   * Le seul critere qui veut dire quelque chose: ce test CHARGE-T-IL le module depuis le jumeau ?
+   * Verifie le 2026-07-28 — 7 modules le sont, sur 15 partages. */
+  const chargeDuJumeau = (f) => {
+    const base = f.replace(/\.js$/, '');
+    return new RegExp("'biii',\\s*'lib'(,\\s*'" + base + "(\\.js)?')|'biii',\\s*'lib'\\)[^\\n]*'" + base).test(source);
+  };
+  const nus = partages.filter((f) => {
+    if (chargeDuJumeau(f)) return false;
+    const a = fs.readFileSync(path.join(dirA, f)); const b = fs.readFileSync(path.join(__dirname, '..', 'lib', f));
+    return !a.equals(b);                      // identique + non compare = sans risque
+  });
+  const nouveaux = nus.filter((f) => !NON_COUVERTS_CONNUS.has(f));
+  console.log('       couverture: ' + (partages.length - nus.length) + '/' + partages.length
+    + ' modules partages compares · non couverts ET divergents: ' + (nus.join(', ') || 'aucun'));
+  assert.deepStrictEqual(nouveaux, [],
+    'un module partage a DIVERGE sans qu aucune comparaison ne le regarde: ' + nouveaux.join(', ')
+    + '. Ajouter une comparaison, ou le declarer dans NON_COUVERTS_CONNUS avec la raison.');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
