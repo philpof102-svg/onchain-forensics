@@ -1,0 +1,66 @@
+# LA SUITE TOURNE SUR CHAQUE POUSSÉE — ce dépôt n'avait AUCUNE CI, jamais.
+#
+# ⚠️ POURQUOI CE FICHIER EXISTE, et pourquoi il compte plus ici que dans `biii`.
+# Au 2026-07-28 ce dépôt n'avait aucun dossier `.github/workflows` et aucun run, alors que c'est
+# LUI qui est publié sur npm (`onchain-forensics`). Le seul garde était `prepublishOnly`, qui ne
+# se déclenche qu'au moment de publier : tout ce qui vit sur master entre deux versions n'était
+# validé par rien.
+#
+# Ce que ça a coûté, mesuré : le 2026-07-28 un port fait au shell a laissé `readBridgeExit` avec
+# une variable non déclarée. `node --check` passait (une variable non définie est une erreur
+# d'EXÉCUTION, pas de syntaxe) et `npm test` sortait vert, parce qu'aucun test n'appelait cette
+# fonction. Master a porté une fonction morte ~7 heures. La CI seule ne l'aurait pas vue non plus
+# — c'est le filet « chaque export répond sans jeter », ajouté depuis, qui l'attrape. Les deux
+# ensemble sont le garde ; ni l'un ni l'autre ne suffit seul.
+#
+# Aucun secret : ce workflow ne publie rien, il vérifie. Il est donc sûr sur une PR venue d'un fork.
+
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ⚠️ `npm install` et NON `npm ci` — contrairement à `biii`, ce dépôt n'a pas de lockfile.
+      # Vérifié, pas supposé. `npm ci` échouerait sans en produire un, et en fabriquer un ici
+      # serait un changement de fond à décider séparément. Le paquet n'a AUCUNE dépendance de
+      # production (`dependencies: {}`), donc l'installation ne résout rien de tiers.
+      - name: Installer
+        run: npm install --no-audit --no-fund
+
+      # La suite inclut déjà `test/publishable.js` (les requires résolvent, l'index exporte, le
+      # serveur MCP démarre et annonce ses outils) et `test/shared-module-drift.js`, qui compare
+      # ce dépôt à son jumeau `biii`. Ce dernier SE SAUTE ici en le disant — le voisin n'existe
+      # pas dans un checkout isolé — et c'est le comportement voulu : il annonce qu'il n'a pas eu
+      # lieu au lieu de se déclarer vert.
+      - name: Suite
+        run: npm test
+
+      # ⚠️ Le filet minimal, en clair et hors de la suite : le paquet s'installe-t-il et s'importe-t-il
+      # comme le ferait un utilisateur ? `npm pack` puis import du tarball attrape ce qu'un test lancé
+      # depuis l'arbre ne peut pas voir — un fichier oublié dans `files`, un chemin relatif qui ne
+      # survit pas à l'empaquetage.
+      - name: Le tarball s'installe et s'importe
+        run: |
+          set -e
+          npm pack --silent | tail -1 > /tmp/tarball.txt
+          mkdir -p /tmp/conso && cd /tmp/conso && npm init -y --silent > /dev/null
+          npm install --silent --no-audit --no-fund "$GITHUB_WORKSPACE/$(cat /tmp/tarball.txt)"
+          node -e "const m=require('onchain-forensics');const n=Object.keys(m).length;if(!n)throw new Error('le paquet publie n exporte RIEN');console.log(n+' exports depuis le tarball')"
