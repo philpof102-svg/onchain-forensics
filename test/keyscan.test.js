@@ -25,7 +25,10 @@
  *
  * Run: node test/keyscan.test.js
  */
-const { scanKeyText, isPlausibleScalar } = require('../lib/keyscan');
+const { scanKeyText, scanKeyPaths, isPlausibleScalar } = require('../lib/keyscan');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 let failed = 0;
 const check = (label, got, want) => {
@@ -79,6 +82,62 @@ check('un scalaire au-dessus de N est refuse',
 check('★ labelled_only DIT que les lignes suivantes ont ete verifiees',
   String(/following lines were checked/i.test(
     scanKeyText('{\n  "privateKey":\n    "REDACTED"\n}', { filename: 'a.json' })[0].note)), 'true');
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════════════
+ * scanKeyPaths — LE REGROUPEMENT. Mesure du 2026-07-28, apres le correctif multiligne ci-dessus.
+ *
+ * Le correctif pose la valeur sur `valueLine`; `line` porte l'ETIQUETTE. Le calcul d'empreinte, lui,
+ * relisait toujours `line` — donc ne trouvait aucun hex, donc n'identifiait AUCUN secret trouve en JSON
+ * indente. Et comme l'echec d'identification s'ecrivait `fingerprint: 'unknown'`, c'est-a-dire une CLE de
+ * regroupement, toutes ces trouvailles fusionnaient. Mesure sur deux fichiers portant deux cles
+ * DIFFERENTES:
+ *
+ *   avant : [{ fingerprint: 'unknown', liveLocations: [a.json:2, b.json:2], distinctFiles: 2 }]  ← 1 secret
+ *   apres : trois lignes, trois empreintes distinctes                                            ← 3 secrets
+ *
+ * « Je n'ai pas pu identifier ces valeurs » sortait exactement comme « c'est la meme valeur ». Sur un
+ * scanner d'exposition, ce sous-comptage est un faux feu vert.
+ *
+ * ⚠️ ON TIENT LES DEUX BORNES. Ne verifier que « les cles differentes se separent » serait satisfait par
+ * un regroupeur qui ne regroupe RIEN. Le cas ★ MEME cle exige donc l'inverse: une seule ligne pour une
+ * valeur repetee — et il la repete sous les DEUX formes (une ligne / JSON indente), donc il echouerait
+ * aussi si le correctif `valueLine` produisait une empreinte differente selon l'ecriture.
+ *
+ * ⚠️ CE QUI N'EST PAS EPINGLE, dit franchement: la branche `unfingerprinted` (fichier illisible ou modifie
+ * entre le balayage et le regroupement) n'est pas atteignable de facon deterministe depuis un test — les
+ * deux lectures ont lieu dans le meme appel, et `scanKeyPaths` ne prend pas de joint d'injection `fs`.
+ * Provoquer la course serait un test instable, ce qui entraine a ignorer le rouge. Elle reste donc
+ * couverte par la relecture seule.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════════ */
+process.stdout.write('\nscanKeyPaths — deux cles differentes ne sont pas « la meme cle »:\n');
+
+const K2 = '0x' + 'c3'.repeat(31) + 'd4';                // une SECONDE cle, distincte de K
+const racine = fs.mkdtempSync(path.join(os.tmpdir(), 'keyscan-'));
+try {
+  // Deux cles DIFFERENTES, toutes deux en JSON indente — la forme que le regroupeur ne savait pas lire.
+  fs.writeFileSync(path.join(racine, 'a.json'), '{\n  "privateKey":\n    "' + K + '"\n}');
+  fs.writeFileSync(path.join(racine, 'b.json'), '{\n  "privateKey":\n    "' + K2 + '"\n}');
+  const r = scanKeyPaths([racine]);
+
+  check('★ deux cles differentes en JSON indente font DEUX secrets', String(r.secrets.length), '2');
+  check('★ et deux empreintes DISTINCTES',
+    String(new Set(r.secrets.map((s) => s.fingerprint)).size), '2');
+  check('★ aucune n est laissee sans empreinte (c est la relecture de valueLine qui le prouve)',
+    String(r.secrets.every((s) => typeof s.fingerprint === 'string' && s.fingerprint.length === 12)), 'true');
+  check('chacune est comptee dans UN fichier, pas deux',
+    r.secrets.map((s) => s.distinctFiles).join(','), '1,1');
+  check('le verdict reste celui d une exposition', r.verdict, 'cleartext_keys_present');
+
+  // BORNE INVERSE: la MEME cle, ecrite d'un cote sur une ligne et de l'autre en JSON indente.
+  fs.rmSync(path.join(racine, 'b.json'));
+  fs.writeFileSync(path.join(racine, '.env'), 'PRIVATE_KEY=' + K);
+  const r2 = scanKeyPaths([racine]);
+  check('★ BORNE: la MEME cle sous deux ecritures reste UN seul secret', String(r2.secrets.length), '1');
+  check('★ BORNE: et elle est comptee dans DEUX fichiers distincts',
+    String(r2.secrets[0].distinctFiles), '2');
+} finally {
+  fs.rmSync(racine, { recursive: true, force: true });
+}
 
 process.stdout.write('\n' + (failed ? `${failed} cas en echec\n` : 'tous les cas tiennent\n'));
 process.exit(failed ? 1 : 0);
