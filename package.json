@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "start": "node bin/onchain-forensics-mcp.js",
-    "test": "node test/b20.test.js && node test/agent-vet-gate.js && node test/lure-ask.js && node test/lure-link.test.js && node test/seed-exposure.js && node test/keyscan.test.js && node test/multicall.test.js && node test/shared-module-drift.js && node test/publishable.js",
+    "test": "node test/b20.test.js && node test/agent-vet-gate.js && node test/lure-ask.js && node test/lure-link.test.js && node test/seed-exposure.js && node test/keyscan.test.js && node test/multicall.test.js && node test/wallet-watch.test.js && node test/shared-module-drift.js && node test/publishable.js",
     "prepublishOnly": "npm test"
   },
   "keywords": [
