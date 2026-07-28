@@ -408,6 +408,32 @@ t('readBridgeExit et followTron rendent LA MEME chose des deux cotes', async () 
   assert.strictEqual(vus.size, 3, 'trois situations opposees doivent produire trois etats distincts');
 });
 
+/* Huitieme garde par comparaison de comportement: le plafond de scanRug. Un plafond qui differe entre les
+ * deux copies signifie que le meme appel couvre un nombre different d'adresses selon le paquet utilise —
+ * et c'est precisement la sorte d'ecart qui se remarque des mois plus tard, dans un chiffre. */
+t('scanRug decoupe et plafonne PAREIL des deux cotes', async () => {
+  const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'rugsignals.js');
+  if (!fs.existsSync(voisin)) {
+    console.log('       ⚠ SAUTE — biii/lib/rugsignals.js absent: la comparaison n\'a PAS eu lieu.');
+    return;
+  }
+  const ici = require('../lib/rugsignals');
+  const la = require(voisin);
+  const bouchon = async () => ({ ok: true, json: async () => ({ result: {} }) });
+  const vus = new Set();
+  for (const n of [20, 40, 120]) {
+    const liste = Array.from({ length: n }, (_, i) => adr(i + 1));
+    const [a, b] = [await ici.scanRug('base', liste, { fetchImpl: bouchon }),
+      await la.scanRug('base', liste, { fetchImpl: bouchon })];
+    assert.strictEqual(Object.keys(a).length, Object.keys(b).length, n + ' adresses: le nombre de cles a derive');
+    const ns = (r) => Object.values(r).filter((x) => x.verdict === 'not_scanned').length;
+    assert.strictEqual(ns(a), ns(b), n + ' adresses: le compte `not_scanned` a derive');
+    vus.add(Object.keys(a).length + ':' + ns(a));
+  }
+  /* Sanity: si les trois tailles donnaient le meme etat, deux copies egalement cassees s'accorderaient. */
+  assert.strictEqual(vus.size, 3, 'trois tailles opposees doivent produire trois etats distincts');
+});
+
 (async () => {
   for (const [nom, fn] of files) {
     try { await fn(); pass++; console.log('  ok   ' + nom); }
