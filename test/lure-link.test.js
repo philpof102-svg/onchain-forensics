@@ -72,6 +72,35 @@ check('★ BORNE: la marque devant SON PROPRE domaine n est pas une impersonatio
 check('★ BORNE: une arobase SANS marque connue ne declenche rien',
   v('https://user@beaconlayer.co/'), 'unrecognised');
 
+/* ── ★ trouve EN SERVANT POUR DE VRAI, le 2026-07-29 ──────────────────────────────────────────────
+ * Un compte Base officiel a envoye un lien `calendar.app.google` pour reserver un creneau. Ce module a
+ * rendu `high_risk`, sur deux drapeaux tous deux fautifs:
+ *
+ *   « Domain "app.google" is not a platform this recognises »
+ *   « The named platform ("Google Calendar") is not one of the browser-based tools productions record on »
+ *
+ * Le premier: la liste contenait deja `docs.google.com` et `drive.google.com`, et sa premiere entree est
+ * `calendly.com` — exactement le meme usage. Un oubli, pas une decision.
+ * Le second: la plateforme etait nommee comme outil de RENDEZ-VOUS, pas d'enregistrement. Un drapeau qui
+ * a raison sur les mots et tort sur le fond est du bruit — et le bruit apprend a sauter la ligne, ce qui
+ * est la these meme de ce fichier. Un outil qui crie sur Google Agenda se fait desinstaller.               */
+process.stdout.write('\nles services de rendez-vous ordinaires ne doivent pas sonner l alarme:\n');
+check('★ calendar.app.google est un service reel reconnu',
+  v('https://calendar.app.google/jDDPjfsPTUrk3w84A'), 'recognised_neutral');
+check('★ calendar.google.com aussi',
+  v('https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ3'), 'recognised_neutral');
+check('★ une plateforme nommee « Google Calendar » ne leve AUCUN drapeau',
+  String(vetApproach({ links: ['https://calendar.app.google/x'], platform: 'Google Calendar' }).flags.length), '0');
+check('★ et le verdict redevient `unverified` — ni alarme, ni quitus',
+  vetApproach({ links: ['https://calendar.app.google/x'], platform: 'Google Calendar' }).verdict, 'unverified');
+check('BORNE: docs.google.com n a pas bouge', v('https://docs.google.com/document/d/x'), 'recognised_neutral');
+check('★ BORNE: une plateforme nommee « WeChat » reste signalee',
+  String(vetApproach({ links: [], platform: 'WeChat' }).flags.some((f) => /named platform/.test(f))), 'true');
+check('★ BORNE: le lien qui USURPE wechat reste une fraude',
+  vetApproach({ links: ['https://wechat.web09eu.com/dl'], platform: 'WeChat' }).verdict, 'fraud');
+check('★ BORNE: un domaine inconnu reste inconnu (la liste ne blanchit pas tout)',
+  v('https://beaconlayer.co/'), 'unrecognised');
+
 /* ── ★ schemes that carry content instead of pointing at a page ───────────────────────────────────── */
 process.stdout.write('\ncheckLink — un schema qui n est pas http(s):\n');
 check('★ file: n est pas un domaine inconnu', v('file:///C:/Users/x/Downloads/setup.exe'), 'not_a_web_link');
