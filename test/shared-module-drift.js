@@ -356,7 +356,9 @@ t('chaque export asynchrone de trace repond sans jeter (filet anti-ReferenceErro
   const appels = [
     ['whatMoved', () => T.whatMoved('base', TX, bouchon)],
     ['readBridgeExit', () => T.readBridgeExit('base', TX, bouchon)],
-    ['followTron', () => T.followTron('T' + 'A'.repeat(33), { maxHops: 1, lireJson: async () => ({ data: [] }) })],
+    // Adresse fabriquee par l'inverse: `'T' + 'A'.repeat(33)` passait la regex mais sa somme de controle
+    // ne verifiait pas, donc depuis le 2026-07-29 la piste s'arretait au hop 0 sans rien exercer.
+    ['followTron', () => T.followTron(T.hexToTron('41' + 'a6'.repeat(20)), { maxHops: 1, lireJson: async () => ({ data: [] }) })],
   ];
   for (const [nom, appel] of appels) {
     let r;
@@ -376,7 +378,14 @@ t('readBridgeExit et followTron rendent LA MEME chose des deux cotes', async () 
   const ici = require('../lib/trace');
   const la = require(voisin);
   const TX = '0x' + 'ab'.repeat(32);
-  const ADR = 'T' + 'A'.repeat(33);
+  /* ⚠️ CE FIXTURE ETAIT `'T' + 'A'.repeat(33)` — 34 caracteres qui passent la regex et dont la somme de
+   * controle ne peut pas verifier. Tant que `tronToHex` jetait cette somme sans la lire, l'adresse
+   * paraissait bonne; depuis qu'elle est verifiee (2026-07-29), les trois pistes ci-dessous s'arretaient
+   * sur l'ADRESSE au lieu d'exercer la lecture qu'elles pretendent tester. Le fixture n'a jamais ete une
+   * adresse TRON: c'est le defaut corrige dans `lib/trace.js`, present dans l'instrument qui devait le
+   * surveiller. On la fabrique donc avec l'inverse, qui calcule une vraie double-SHA256. */
+  const ADR = ici.hexToTron('41' + 'a6'.repeat(20));
+  assert.strictEqual(typeof ADR, 'string', 'le fixture d adresse doit etre constructible');
   const COMPTE = { data: [{ balance: 5000000, create_time: 1700000000000 }] };
 
   const PONTS = [
