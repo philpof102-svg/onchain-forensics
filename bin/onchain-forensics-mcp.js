@@ -83,11 +83,33 @@ const TOOLS = [
       paths: { type: 'array', items: { type: 'string' }, description: 'directories to scan; defaults to Documents, Desktop and Downloads' } }, required: [] } },
 ];
 
+/* ⚠️ UNE ENTREE REFUSEE N'EST PAS UN VERDICT. Mesure du 2026-07-29 sur cette surface, en stdio:
+ *
+ *     rug_powers      sans address   ->  verdict "unknown", "no result"
+ *     open_approvals  sans owner     ->  ok:true, "Every entry was confirmed by calling allowance()"
+ *
+ * L'appelant lit « j'ai regarde et je ne sais pas », voire « verifie, aucune autorisation ouverte » —
+ * pour un jeton et un portefeuille QUE PERSONNE N'A NOMMES. Un champ oublie par un agent devenait un
+ * resultat sur une adresse inexistante.
+ *
+ * Et deux outils voisins faisaient DEJA le bon geste: `b20_authentic` repond « not a well-formed
+ * address », `trace_theft` repond « txHash required ». La garde etait possible ici, elle n'etait
+ * simplement pas appliquee partout. On la met a UN seul endroit, pour qu'il n'y ait pas deux
+ * definitions de « adresse utilisable » qui divergent. */
+const exigeAdresse = (v, champ) => {
+  const s = String(v == null ? '' : v).trim();
+  if (/^0x[0-9a-fA-F]{40}$/.test(s)) return null;
+  return { error: 'REJECTED INPUT: `' + champ + '` is ' + (v == null ? 'missing' : '"' + s.slice(0, 24) + '"')
+    + ', which is not a 0x-prefixed 40-hex address. Nothing was looked up — this is NOT a verdict about a '
+    + 'token or a wallet, and it is NOT an empty result. Pass a real address and call again.' };
+};
+
 async function callTool(name, a = {}) {
   if (name === 'vet_meme') return await vetMeme({ symbol: a.symbol, chainId: a.chainId, address: a.address });
-  if (name === 'rug_powers') return await scanRugOne(a.chain || 'base', a.address);
+  if (name === 'rug_powers') return exigeAdresse(a.address, 'address') || await scanRugOne(a.chain || 'base', a.address);
   if (name === 'b20_authentic') return await classifyB20(a.chain || 'base', a.address);
   if (name === 'launch_funder') {
+    const refus = exigeAdresse(a.address, 'address'); if (refus) return refus;
     const f = await traceFeeder(a.chain || 'base', a.address);
     return (f && f.ok) ? f : { error: (f && f.reason) || 'could not trace this launch' };
   }
@@ -105,10 +127,12 @@ async function callTool(name, a = {}) {
   if (name === 'recovery_offer') return await assessRecoveryOffer(a);
   if (name === 'vet_approach') return vetApproach(a);
   if (name === 'open_approvals') {
+    const refus = exigeAdresse(a.owner, 'owner'); if (refus) return refus;
     const r = await checkApprovals(a.chain || 'base', a.owner);
     return r.ok ? r : { error: r.reason };
   }
   if (name === 'watch_wallet') {
+    const refus = exigeAdresse(a.owner, 'owner'); if (refus) return refus;
     const r = await watchWallet(a.chain || 'base', a.owner, { persist: a.persist !== false });
     return r.ok ? r : { error: r.reason };
   }
