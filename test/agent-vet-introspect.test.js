@@ -51,6 +51,27 @@ const ROUTES = {
    * en revanche passer n'importe quelle valeur truthy, et `auditTools()` puis `.length` recevaient alors
    * un objet ou une chaine. Un serveur hostile ou simplement casse suffit. */
   '/pastableau': { code: 200, body: rpc({ result: { serverInfo: { name: 'x', version: '1' }, tools: { a: 1 } } }) },
+  /* ── SSE: le mode NORMAL d'un MCP moderne, et le seul que parseMcp lisait mal ─────────────────────
+   * `parseMcp` prenait la PREMIERE ligne `data:` et s'arretait. Un serveur qui envoie une notification
+   * avant sa reponse — courant en streaming — voyait donc sa notification parsee a la place de sa
+   * reponse: JSON parfaitement valide, aucun repli declenche, et un serveur qui avait repondu ressortait
+   * « the surface is UNREAD ». Sur un outil qui RECENSE l'auditabilite, ce faux negatif gonfle le compte
+   * des non-auditables. Le meme payload est servi aux deux appels (initialize ET tools/list). */
+  '/sse':      { code: 200, body: 'data: ' + rpc({ result: { serverInfo: { name: 'demo', version: '1' }, tools: OUTILS } }) + '\n\n' },
+  '/sse-notif': { code: 200,
+    body: 'data: ' + JSON.stringify({ jsonrpc: '2.0', method: 'notifications/message', params: {} }) + '\n\n'
+      + 'data: ' + rpc({ result: { serverInfo: { name: 'demo', version: '1' }, tools: OUTILS } }) + '\n\n' },
+  '/sse-ping': { code: 200,
+    body: ': keep-alive\n\nevent: message\ndata: ' + rpc({ result: { serverInfo: { name: 'demo', version: '1' }, tools: OUTILS } }) + '\n\n' },
+  /* Un JSON coupe sur PLUSIEURS lignes `data:` dans UNE trame. La spec SSE exige de les concatener;
+   * sans ca, chaque moitie est du JSON invalide et la reponse entiere disparait. */
+  '/sse-coupe': { code: 200,
+    body: 'data: {"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"demo","version":"1"},\n'
+      + 'data: "tools":' + JSON.stringify(OUTILS) + '}}\n\n' },
+  /* Un serveur qui n'envoie QUE des notifications: il parle MCP, il n'a simplement pas repondu. Le dire
+   * « pas un endpoint MCP » serait l'accusation inverse du defaut corrige. */
+  '/sse-que-notif': { code: 200,
+    body: 'data: ' + JSON.stringify({ jsonrpc: '2.0', method: 'notifications/message', params: {} }) + '\n\n' },
   '/404':      { code: 404, body: 'nope' },
   '/401':      { code: 401, body: 'auth' },
   '/500':      { code: 500, body: 'boom' },
@@ -104,6 +125,29 @@ srv.listen(0, '127.0.0.1', async () => {
   const html = await introspectHttp(U('/html'));
   check('★ une page HTML n est pas « un MCP sans outils »', String(html.mcp), 'false');
   check('   et la raison le DIT', String(/not an MCP endpoint at all/.test(html.reason || '')), 'true');
+
+  /* ── ★ SSE: une reponse en streaming doit etre LUE, pas classee « surface non lue » ─────────────── */
+  process.stdout.write('\nles reponses en streaming (SSE), le mode normal d un MCP:\n');
+  for (const [nom, route] of [['une trame simple', '/sse'],
+    ['★ une NOTIFICATION avant la reponse', '/sse-notif'],
+    ['un keep-alive puis un `event:` nomme', '/sse-ping']]) {
+    const r = await introspectHttp(U(route));
+    check('★ ' + nom + ' : les outils sont lus', String(r.tools && r.tools.length), '1');
+    check('   et aucune raison d echec', String(r.reason), 'null');
+  }
+
+  /* Ces deux cas existent parce que DEUX MUTATIONS ONT SURVECU: j'avais ecrit la concatenation
+   * multi-ligne et le repli sur la premiere trame lisible sans couvrir ni l'un ni l'autre. Du code non
+   * teste, pas du code inutile — la difference se voit en mutant, pas en relisant. */
+  const coupe = await introspectHttp(U('/sse-coupe'));
+  check('★ un JSON coupe sur deux lignes `data:` est recolle (spec SSE)',
+    String(coupe.tools && coupe.tools.length), '1');
+
+  const queNotif = await introspectHttp(U('/sse-que-notif'));
+  check('★ un serveur qui n envoie QUE des notifications parle quand meme MCP',
+    String(queNotif.mcp), 'true');
+  check('   sa surface est UNREAD, pas vide, et il n est PAS accuse de ne pas etre un MCP',
+    String(/UNREAD, not empty/.test(queNotif.reason || '')), 'true');
 
   const pasTab = await introspectHttp(U('/pastableau'));
   check('★ un `tools` present mais non-tableau est refuse (sinon auditTools recoit un objet)',
