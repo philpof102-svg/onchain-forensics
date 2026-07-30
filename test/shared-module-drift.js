@@ -261,7 +261,17 @@ t('judgeCounterparty rend LES MEMES phrases des deux cotes', async () => {
 
 /* Quatrieme garde par comparaison de comportement. Les deux copies balaient le MEME dossier temporaire et
  * doivent rendre le meme drapeau de couverture et les memes compteurs. Le dossier est cree puis supprime:
- * on ne balaie jamais un vrai repertoire de l'utilisateur depuis un test. */
+ * on ne balaie jamais un vrai repertoire de l'utilisateur depuis un test.
+ *
+ * ⚠️ ANGLE MORT DECLARE — cette garde compare `complete` et `skipped`, PAS `verdict` ni `coverage`.
+ * Ces deux champs-la DIVERGENT desormais de la copie `biii`, sciemment et pour deux correctifs faits ICI:
+ *   · 2026-07-29 — `judgeRun` rapporte la localisation de la PHRASE, plus celle du run qui la contient.
+ *   · 2026-07-30 — un balayage qui n'a ouvert AUCUN fichier rend `not_scanned`, plus `nothing_found`
+ *     (voir test/zero-read.test.js). Les trois cas de cette garde lisent tous au moins un fichier ou
+ *     bloquent une lecture, donc `complete` et `skipped` s'accordent encore et elle reste verte.
+ * Aligner les deux copies serait un PORT depuis `biii`, ce que Phil a refuse le 2026-07-29
+ * (`git reset --hard f0db150`). La divergence est donc une decision, pas un oubli — et elle est ecrite
+ * ici plutot que laissee au silence d'une garde qui passe. */
 t('scanPaths rend la MEME couverture des deux cotes', async () => {
   const voisin = path.join(__dirname, '..', '..', 'biii', 'lib', 'seedscan.js');
   if (!fs.existsSync(voisin)) {
