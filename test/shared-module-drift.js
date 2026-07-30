@@ -269,6 +269,10 @@ t('judgeCounterparty rend LES MEMES phrases des deux cotes', async () => {
  *   · 2026-07-30 — un balayage qui n'a ouvert AUCUN fichier rend `not_scanned`, plus `nothing_found`
  *     (voir test/zero-read.test.js). Les trois cas de cette garde lisent tous au moins un fichier ou
  *     bloquent une lecture, donc `complete` et `skipped` s'accordent encore et elle reste verte.
+ *   · 2026-07-30 — `scanPaths` JETTE desormais quand `paths` n'est pas un tableau de chaines non vides
+ *     (`exigeListeChemins`), la ou la copie `biii` iterait une chaine caractere par caractere. Cette
+ *     garde ne passe que des tableaux valides, donc elle ne voit pas la divergence: c'est ecrit ici
+ *     plutot que laisse au silence d'un cas qui passe.
  * Aligner les deux copies serait un PORT depuis `biii`, ce que Phil a refuse le 2026-07-29
  * (`git reset --hard f0db150`). La divergence est donc une decision, pas un oubli — et elle est ecrite
  * ici plutot que laissee au silence d'une garde qui passe. */

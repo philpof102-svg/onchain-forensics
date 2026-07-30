@@ -26,6 +26,8 @@
  * Run: node test/mcp-input-guard.test.mjs
  */
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -110,6 +112,75 @@ const estRefus = (o) => String(!!(o && typeof o.error === 'string' && /^REJECTED
   const r0 = await checkApprovals('base', 'nawak');
   check('★ le message interdit de le lire comme une liste vide',
     String(/not an empty approval list/.test(r0.reason || '')), 'true');
+
+  /* ── ★ L'AUTRE ARGUMENT: `paths` — mesure du 2026-07-30 ────────────────────────────────────────────
+   * Avec USERPROFILE pointe sur une fausse maison vide et un dossier temoin contenant une phrase en
+   * clair, `seed_exposure` appele avec paths: "<le dossier qui contient la phrase>" rendait EXACTEMENT
+   * la meme reponse que sans paths du tout: nothing_found, complete:true, "nothing blocked a read".
+   * `Array.isArray` etait faux, l'argument tombait en silence sur les chemins par defaut, et on
+   * repondait le bulletin le plus rassurant du module a propos de dossiers que personne n'avait nommes.
+   *
+   * ⚠️ Aucun cas ici n'appelle l'outil SANS `paths`: cela balaierait le vrai dossier Documents de la
+   * personne qui lance la suite. La borne positive passe par une fixture temporaire. */
+  process.stdout.write('\nla liste de chemins — une entree inutilisable n est pas un balayage propre:\n');
+  const bac = path.join(os.tmpdir(), 'mcp-paths-' + process.pid);
+  fs.mkdirSync(bac, { recursive: true });
+  fs.writeFileSync(path.join(bac, 'notes.txt'), 'backup\n' + ('abandon '.repeat(11) + 'about') + '\n');
+  try {
+    for (const outil of ['seed_exposure', 'key_exposure']) {
+      for (const [nom, v] of [['une chaine', bac], ['un nombre', 42], ['un tableau vide', []],
+        ['un tableau avec une chaine vide', ['']], ['un tableau avec un nombre', [123]]]) {
+        check(`★ ${outil} avec ${nom} REFUSE`, estRefus(await call(outil, { paths: v })), 'true');
+      }
+    }
+    const refusC = await call('seed_exposure', { paths: bac });
+    check('★ le refus DIT que rien n a ete balaye',
+      String(/Nothing was scanned/.test(refusC.error || '')), 'true');
+    check('★ et interdit de le lire comme un resultat propre',
+      String(/NOT a clean result/.test(refusC.error || '')), 'true');
+    check('★ il ne porte AUCUN verdict', String(refusC.verdict === undefined), 'true');
+
+    /* ★ BORNE — sinon un serveur qui refuse tout passerait tous les cas ci-dessus. Le dossier temoin
+     * contient une phrase valide: la garde doit laisser passer, et le moteur doit la trouver. */
+    const bonPaths = await call('seed_exposure', { paths: [bac] });
+    check('★ BORNE: un tableau de chemins traverse la garde', estRefus(bonPaths), 'false');
+    check('   et le moteur trouve bien la phrase du dossier temoin', String(bonPaths.verdict), 'exposed');
+    const bonKeys = await call('key_exposure', { paths: [bac] });
+    check('★ BORNE: key_exposure aussi traverse la garde', estRefus(bonKeys), 'false');
+    check('   et rapporte un balayage reel', String(bonKeys.scanned > 0), 'true');
+
+    /* ── la BIBLIOTHEQUE: `for (const root of paths)` accepte une CHAINE et l'iterait par caractere ──
+     * "C:\\...\\coffre" devenait autant de chemins d'un caractere; le bulletin annoncait « 22 path(s)
+     * were given », et sous Windows `existsSync('\\')` est vrai, donc le balayage partait sur la racine
+     * du disque a profondeur 6 (la premiere sonde a tourne >120 s). */
+    process.stdout.write('\nles deux fonctions de balayage appelees directement:\n');
+    const SEED = await import('../lib/seedscan.js');
+    const KEY = await import('../lib/keyscan.js');
+    const idx = SEED.loadWordlist();
+    const jette = (fn) => { try { fn(); return 'non'; } catch (e) { return e instanceof TypeError ? 'TypeError' : 'autre'; } };
+    /* ⚠️ La chaine passee ici est `zz`, PAS un vrai chemin — et c'est le defaut lui-meme qui l'impose.
+     * Mesure du 2026-07-30 en mutation-testant ces cas: en retirant la garde, `scanPaths('<vrai chemin>')`
+     * decoupe l'argument en caracteres, tombe sur `\` qui EXISTE, et part balayer la racine du disque
+     * jusqu'au delai de 180 s. La mutation etait bien tuee, mais par un BLOCAGE et non par une assertion
+     * — un test dont le mode d echec est une suite figee trois minutes apprend a tuer la suite. Avec
+     * `zz`, aucun caractere n'existe comme chemin: sans garde le cas rend `not_scanned` et le test
+     * rougit tout de suite, ce qui est la meme information rendue en une seconde. */
+    check('★ scanPaths avec une chaine JETTE', jette(() => SEED.scanPaths('zz', idx)), 'TypeError');
+    check('★ scanPaths avec null JETTE', jette(() => SEED.scanPaths(null, idx)), 'TypeError');
+    check('★ scanPaths avec [\'\'] JETTE', jette(() => SEED.scanPaths([''], idx)), 'TypeError');
+    check('★ scanKeyPaths avec une chaine JETTE', jette(() => KEY.scanKeyPaths('zz')), 'TypeError');
+    check('★ scanKeyPaths avec [123] JETTE', jette(() => KEY.scanKeyPaths([123])), 'TypeError');
+    /* ★ BORNE — une liste VIDE reste valide: c'est ce que `defaultPaths` rend quand aucune racine n'est
+     * resolue, et les deux balayages savent deja la traduire en « on n'a pas regarde ». Durcir jusqu'a
+     * la refuser ici ferait jeter l'outil la ou il doit rendre `not_scanned`. */
+    check('★ BORNE: scanPaths([]) ne jette PAS', jette(() => SEED.scanPaths([], idx)), 'non');
+    check('   et rend not_scanned, pas nothing_found', SEED.scanPaths([], idx).verdict, 'not_scanned');
+    check('★ BORNE: scanKeyPaths([]) ne jette PAS', jette(() => KEY.scanKeyPaths([])), 'non');
+    check('   et rend not_scanned', KEY.scanKeyPaths([]).verdict, 'not_scanned');
+    check('★ BORNE: un vrai tableau de chemins traverse et trouve', SEED.scanPaths([bac], idx).verdict, 'exposed');
+  } finally {
+    fs.rmSync(bac, { recursive: true, force: true });
+  }
 
   srv.kill();
   process.stdout.write('\n' + (failed ? `${failed} cas en echec\n` : 'tous les cas tiennent\n'));

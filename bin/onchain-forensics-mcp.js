@@ -104,6 +104,33 @@ const exigeAdresse = (v, champ) => {
     + 'token or a wallet, and it is NOT an empty result. Pass a real address and call again.' };
 };
 
+/* ⚠️ MEME MOTIF QUE `exigeAdresse`, SUR L'AUTRE ARGUMENT — mesure du 2026-07-30 en stdio, avec
+ * USERPROFILE pointe sur une fausse maison et un dossier temoin contenant une phrase en clair:
+ *
+ *     seed_exposure  paths: "<le dossier qui CONTIENT la phrase>"  ->  nothing_found, complete:true,
+ *                                                                      "as_intended — nothing blocked a read"
+ *     seed_exposure  sans paths                                    ->  la MEME reponse, octet pour octet
+ *
+ * `Array.isArray` etait faux, donc l'argument tombait en silence sur les chemins par defaut: on repondait
+ * le bulletin le plus rassurant que ce module sache produire, a propos de dossiers que l'appelant n'a pas
+ * nommes, alors que celui qu'il a nomme portait une phrase confirmee. `paths: 42` et `paths: []` rendaient
+ * la meme chose. Un agent qui passe une chaine au lieu d'un tableau — l'erreur la plus banale qui soit —
+ * recevait un feu vert.
+ *
+ * ABSENT reste different de MALFORME: sans le champ, les chemins par defaut sont le comportement
+ * documente de l'outil. Avec un champ inutilisable, on ne devine pas. */
+const exigeChemins = (a) => {
+  if (a.paths === undefined || a.paths === null) return { paths: SEED.defaultPaths() };
+  const refus = (quoi) => ({ refus: { error: 'REJECTED INPUT: `paths` ' + quoi + '. Nothing was scanned — '
+    + 'this is NOT a verdict about your machine, and it is NOT a clean result. Pass an array of folder '
+    + 'paths (or omit `paths` entirely to use the defaults) and call again.' } });
+  if (!Array.isArray(a.paths)) return refus('is a ' + typeof a.paths + ', not an array of folder paths');
+  if (!a.paths.length) return refus('is an empty array; an empty list is not a request to scan the defaults');
+  const mauvais = a.paths.filter((p) => typeof p !== 'string' || !p.trim());
+  if (mauvais.length) return refus('contains ' + mauvais.length + ' entry/entries that are not non-empty strings');
+  return { paths: a.paths };
+};
+
 async function callTool(name, a = {}) {
   if (name === 'vet_meme') return await vetMeme({ symbol: a.symbol, chainId: a.chainId, address: a.address });
   if (name === 'rug_powers') return exigeAdresse(a.address, 'address') || await scanRugOne(a.chain || 'base', a.address);
@@ -138,12 +165,12 @@ async function callTool(name, a = {}) {
   }
   if (name === 'vet_agent') return await vetAgent(a);
   if (name === 'key_exposure') {
-    const paths = Array.isArray(a.paths) && a.paths.length ? a.paths : SEED.defaultPaths();
-    return KEY.scanKeyPaths(paths);
+    const c = exigeChemins(a); if (c.refus) return c.refus;
+    return KEY.scanKeyPaths(c.paths);
   }
   if (name === 'seed_exposure') {
-    const paths = Array.isArray(a.paths) && a.paths.length ? a.paths : SEED.defaultPaths();
-    return SEED.scanPaths(paths, SEED.loadWordlist());
+    const c = exigeChemins(a); if (c.refus) return c.refus;
+    return SEED.scanPaths(c.paths, SEED.loadWordlist());
   }
   return { error: 'unknown tool: ' + name };
 }
