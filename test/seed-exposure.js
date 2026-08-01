@@ -127,6 +127,54 @@ try { judgeRun([], index); } catch (e) { refus = e.message; }
 check('judgeRun refuse un run vide au lieu de pointer nulle part',
   refus, 'judgeRun requires a non-empty run of tokens');
 
+/* L'INDEX DEGRADE — mesure du 2026-08-01. `loadWordlist` garde sa propre sortie, mais les trois fonctions
+ * qui CONSOMMENT un index le recoivent en parametre et sont toutes exportees. Sur le vecteur 12 mots ecrit
+ * en liste numerotee, avant le garde:
+ *     loadWordlist() -> scanText ['confirmed']   judgeRun 'confirmed'      <- la verite
+ *     new Map()      -> scanText []              judgeRun 'wordlist_run'
+ *     Map(1 sur 2048)-> scanText []              judgeRun 'wordlist_run'
+ * Les deux lignes degradees sont EXACTEMENT ce que rend un fichier propre. Une absence de lecture publiee
+ * comme un constat, sur la seule question ou un faux negatif laisse une phrase en clair sur le disque. */
+process.stdout.write('\nun index degrade ne peut pas rendre un constat:\n');
+const jeteAvec = (fn) => { try { fn(); return 'AUCUN REFUS'; } catch (e) { return e.message; } };
+const listeNumerotee = V12.split(' ').map((w, i) => `${i + 1}. ${w}`).join('\n');
+const runV12 = V12.split(' ').map((w, i) => ({ w, line: i + 1 }));
+
+// Le temoin qui fait de ce bloc une mesure: sur un index SAIN, ce meme fichier est 'confirmed'. Sans lui,
+// un module qui refuserait TOUT passerait chaque cas ci-dessous.
+check('temoin: index sain, le vecteur est confirme', verdictOf(listeNumerotee), 'confirmed');
+check('temoin: index sain, judgeRun confirme le meme run', judgeRun(runV12, index).verdict, 'confirmed');
+
+for (const [nom, mauvais] of [['vide', new Map()], ['incomplet', new Map([['abandon', 0]])]]) {
+  check(`scanText refuse un index ${nom} au lieu de rendre "aucune trouvaille"`,
+    jeteAvec(() => scanText(listeNumerotee, mauvais)),
+    `scanText requires a complete BIP-39 index of 2048 words, got ${mauvais.size}` +
+    ' — refusing: an incomplete wordlist cannot tell "no phrase here" from "I could not check".');
+  check(`judgeRun refuse un index ${nom} au lieu de publier wordlist_run`,
+    jeteAvec(() => judgeRun(runV12, mauvais)),
+    `judgeRun requires a complete BIP-39 index of 2048 words, got ${mauvais.size}` +
+    ' — refusing: an incomplete wordlist cannot tell "no phrase here" from "I could not check".');
+}
+check('checksumValid refuse un index vide au lieu de rendre false',
+  jeteAvec(() => checksumValid(V12.split(' '), new Map())),
+  'checksumValid requires a complete BIP-39 index of 2048 words, got 0' +
+  ' — refusing: an incomplete wordlist cannot tell "no phrase here" from "I could not check".');
+check('scanText refuse un index absent en le NOMMANT (pas un TypeError sur .has)',
+  jeteAvec(() => scanText(listeNumerotee, undefined)),
+  'scanText requires the Map returned by loadWordlist(), got undefined' +
+  ' — refusing to report on a wordlist it does not have.');
+check('un objet nu n\'est pas un index',
+  jeteAvec(() => scanText(listeNumerotee, { abandon: 0 })),
+  'scanText requires the Map returned by loadWordlist(), got object' +
+  ' — refusing to report on a wordlist it does not have.');
+
+/* L'AUTRE BORNE. Un fail-closed qui avale le cas legitime cesse d'informer: sur un index SAIN, un mot
+ * hors liste doit rester un `false` ordinaire — c'est une vraie reponse, pas une reponse manquante. */
+check('borne inverse: index sain + mot hors liste reste un false, pas un refus',
+  checksumValid((('abandon '.repeat(11)) + 'zzzz').split(' '), index), false);
+check('borne inverse: index sain + fichier sans phrase reste "aucune trouvaille"',
+  verdictOf('the quick brown fox jumps over the lazy dog\n'), 'none');
+
 process.stdout.write('\nthe rule this module is built around:\n');
 const out = JSON.stringify(scanText(V12, index));
 check('output contains no word of the phrase', /abandon|about/.test(out), false);
