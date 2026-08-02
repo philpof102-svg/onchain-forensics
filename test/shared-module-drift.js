@@ -535,7 +535,11 @@ t('findVaults compte et signale PAREIL des deux cotes', async () => {
  * l'angle mort EST la raison pour laquelle la derive n'a jamais ete vue. */
 const NON_COUVERTS_CONNUS = new Set([
   'bip39-english.js',    // liste de mots statique: rien a comparer en comportement
-  'feeder.js',           // ⚠️ correctif siblingsRead (2026-07-28) absent de ce paquet
+  /* ⚠️ TOUJOURS DIVERGENT, mais plus pour la meme raison. Le 2026-08-02 les DEUX jambes de lecture ont ete
+   * diagnostiquees dans cette copie (six entrees, trois sorties — test/feeder-chain-read.test.js) et
+   * corrigees ici sans ouvrir le jumeau. Le `siblingsRead` local n'est donc PAS celui de biii, et rien ne
+   * dit que les deux formes s'accordent: la derive reste declaree. */
+  'feeder.js',
   'holders-health.js',   // ⚠️ correctif concentrationDiscriminating absent
   'lure.js',             // ⚠️ correctif userinfo (le truc du « @ ») absent
   'meme.js',             // ⚠️ correctif not_a_candidate absent
