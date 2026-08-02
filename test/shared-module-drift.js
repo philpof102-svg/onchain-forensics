@@ -540,7 +540,11 @@ const NON_COUVERTS_CONNUS = new Set([
   'lure.js',             // ⚠️ correctif userinfo (le truc du « @ ») absent
   'meme.js',             // ⚠️ correctif not_a_candidate absent
   'multicall.js',        // controle LOCAL du texte source seulement: ne detecte aucune derive
-  'recovery.js',         // ⚠️ correctif chainRead absent
+  /* ⚠️ TOUJOURS DIVERGENT, mais plus pour la meme raison. Le 2026-08-02 le defaut a ete diagnostique DANS
+   * cette copie (quatre situations, deux sorties, mesure dans test/recovery-chain-read.test.js) et corrige
+   * ici, sans ouvrir le jumeau — donc `chainRead` local n'est PAS celui de biii et rien ne dit que les deux
+   * formes s'accordent. La derive reste declaree; ce qui a disparu, c'est le silence sur la lecture ratee. */
+  'recovery.js',
 ]);
 
 t('★ aucun module partage ne rejoint l angle mort en silence', () => {
